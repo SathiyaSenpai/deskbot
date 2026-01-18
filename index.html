@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMO Eye Animation Engine - Behavioral Robotics</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="display">
+            <div class="eye" id="eyeLeft"></div>
+            <div class="eye" id="eyeRight"></div>
+        </div>
+        
+        <div class="controls">
+            <h2>🤖 Behavioral Expression Engine (v2 - Hardware Ready)</h2>
+            
+            <div class="control-section">
+                <h3>🟢 Base / Idle States (5)</h3>
+                <div class="button-grid">
+                    <button data-expression="calm_idle">Calm</button>
+                    <button data-expression="sleepy_idle">Sleepy</button>
+                    <button data-expression="curious_idle">Curious</button>
+                    <button data-expression="shy_idle">Shy</button>
+                    <button data-expression="scanning_idle">Scanning</button>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>🟡 Cognitive / Interaction (8)</h3>
+                <div class="button-grid">
+                    <button data-expression="listening_focused">Listening</button>
+                    <button data-expression="listening_confused">Confused</button>
+                    <button data-expression="thinking">Thinking</button>
+                    <button data-expression="processing">Processing</button>
+                    <button data-expression="understanding">Understanding</button>
+                    <button data-expression="misunderstanding">Misunderstanding</button>
+                    <button data-expression="refusing_gently">Refusing</button>
+                    <button data-expression="startled">Startled</button>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>🟣 Emotional Reactions (6)</h3>
+                <div class="button-grid">
+                    <button data-expression="happy">Happy</button>
+                    <button data-expression="shy_happy">Shy Happy</button>
+                    <button data-expression="embarrassed">Embarrassed</button>
+                    <button data-expression="soft_sad">Sad</button>
+                    <button data-expression="disappointed">Disappointed</button>
+                    <button data-expression="playful_mischief">Mischief</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>⚙️ System / Sleep (3)</h3>
+                <div class="button-grid">
+                    <button data-expression="sleeping_deep">Deep Sleep</button>
+                    <button data-expression="waking_up_slow">Waking Up</button>
+                    <button data-expression="resting_eyes">Rest Eyes</button>
+                </div>
+            </div>
+            
+            <div class="control-section debug-section">
+                <h3>🧪 Debug & Testing</h3>
+                <div class="controls-info">
+                    <p><strong>v2 Refactoring (Hardware-Ready):</strong></p>
+                    <p>✓ 22 core behaviors | ✓ Pure eye movement | ✓ ESP32 portable</p>
+                    <p>Activities phase 2 (sprites): singing, humming, eating, etc.</p>
+                </div>
+                <div class="debug-buttons">
+                    <button id="toggle-randomness" style="background: #0066cc;">Randomness: ON</button>
+                    <button onclick="executeMicroBehavior('double_blink')">Test Double Blink</button>
+                    <button onclick="executeMicroBehavior('half_blink_hold')">Test Half Blink</button>
+                    <button onclick="resetToCalmIdle()">Reset to Calm</button>
+                </div>
+                <div class="controls-info">
+                    <p id="state-display">State: calm_idle</p>
+                    <p id="openness-display">Openness: 100%</p>
+                    <p id="behavior-info"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

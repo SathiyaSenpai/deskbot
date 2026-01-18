@@ -1,0 +1,16 @@
+{
+  "name": "emo-deskbot-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "WebSocket server for EMO Deskbot",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "edge-tts": "^1.0.1",
+    "express": "^4.19.2",
+    "ws": "^8.16.0"
+  }
+}

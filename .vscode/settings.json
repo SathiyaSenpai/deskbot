@@ -1,0 +1,4 @@
+{
+    "chat.useAgentSkills": true,
+    "github.copilot.chat.anthropic.tools.websearch.enabled": true
+}

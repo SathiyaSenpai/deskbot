@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "${workspaceFolder}/esp32/src",
+                "${workspaceFolder}/esp32/include",
+                "${workspaceFolder}/esp32/lib/**",
+                "${workspaceFolder}/esp32/.pio/libdeps/esp32dev/**",
+                "/home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32",
+                "/home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/**",
+                "/home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/**",
+                "/home/sathiya/.platformio/packages/toolchain-xtensa-esp32/xtensa-esp32-elf/include/**"
+            ],
+            "defines": [
+                "ARDUINO=10812",
+                "ESP32",
+                "ARDUINO_ARCH_ESP32",
+                "ESP_PLATFORM"
+            ],
+            "compilerPath": "/home/sathiya/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64",
+            "compileCommands": "${workspaceFolder}/esp32/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

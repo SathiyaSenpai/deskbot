@@ -2,7 +2,6 @@
 #define SENSORS_H
 
 #include <Arduino.h>
-#include <driver/i2s.h>
 #include "pins.h"
 
 struct SensorData {
@@ -11,7 +10,7 @@ struct SensorData {
   uint16_t distance_mm = 0;
   bool touchHead = false;
   bool touchSide = false;
-  uint16_t soundLevel = 0; // crude amplitude from mic (if enabled)
+  int soundLevel = 0; 
 };
 
 class SensorManager {
@@ -20,83 +19,115 @@ public:
     pinMode(PIN_PIR, INPUT);
     pinMode(PIN_ULTRASONIC_TRIG, OUTPUT);
     pinMode(PIN_ULTRASONIC_ECHO, INPUT);
-    initMic();
+    pinMode(PIN_LDR, INPUT);
+    
+    // Initialize ultrasonic to LOW
+    digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
+    
+    Serial.println("[SENSORS] Initialized");
+    Serial.printf("  PIR: %d\n", PIN_PIR);
+    Serial.printf("  Ultrasonic: Trig=%d, Echo=%d\n", PIN_ULTRASONIC_TRIG, PIN_ULTRASONIC_ECHO);
+    Serial.printf("  Touch: Head=%d, Side=%d, Threshold=%d\n", PIN_TOUCH_HEAD, PIN_TOUCH_SIDE, TOUCH_THRESHOLD);
   }
 
+  // FIXED: Improved reading sequence with better debounce
   SensorData read() {
     SensorData d;
+    
+    // 1. Read ambient sensors first (no interference)
     d.light = analogRead(PIN_LDR);
     d.motion = digitalRead(PIN_PIR) == HIGH;
-    d.distance_mm = measureDistance();
-    d.touchHead = touchRead(PIN_TOUCH_HEAD) < TOUCH_THRESHOLD;
-    d.touchSide = touchRead(PIN_TOUCH_SIDE) < TOUCH_THRESHOLD;
-    d.soundLevel = sampleMicLevel();
-    return d;
-  }
+    
+    // 2. Read TOUCH with triple verification (eliminate false triggers)
+    int touchHead1 = touchRead(PIN_TOUCH_HEAD);
+    int touchSide1 = touchRead(PIN_TOUCH_SIDE);
+    
+    delayMicroseconds(500);
+    
+    int touchHead2 = touchRead(PIN_TOUCH_HEAD);
+    int touchSide2 = touchRead(PIN_TOUCH_SIDE);
+    
+    delayMicroseconds(500);
+    
+    int touchHead3 = touchRead(PIN_TOUCH_HEAD);
+    int touchSide3 = touchRead(PIN_TOUCH_SIDE);
+    
+    // All three readings must be below threshold
+    d.touchHead = (touchHead1 < TOUCH_THRESHOLD && 
+                   touchHead2 < TOUCH_THRESHOLD && 
+                   touchHead3 < TOUCH_THRESHOLD);
+    
+    d.touchSide = (touchSide1 < TOUCH_THRESHOLD && 
+                   touchSide2 < TOUCH_THRESHOLD && 
+                   touchSide3 < TOUCH_THRESHOLD);
+    
+    // Debug output for touch calibration
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 2000) {
+      Serial.printf("[TOUCH] Head: %d/%d/%d (avg:%d), Side: %d/%d/%d (avg:%d)\n", 
+                    touchHead1, touchHead2, touchHead3, (touchHead1+touchHead2+touchHead3)/3,
+                    touchSide1, touchSide2, touchSide3, (touchSide1+touchSide2+touchSide3)/3);
+      lastDebug = millis();
+    }
 
-private:
-  static constexpr i2s_port_t MIC_PORT = I2S_NUM_1;
-  bool micReady_ = false;
+    // 3. Read DISTANCE LAST (ultrasonic generates noise)
+    d.distance_mm = measureDistance();
+    
+    
+    d.soundLevel = 0; // Will be set separately if mic enabled
+    return d;
+
+  }
 
   uint16_t measureDistance() {
-    digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
-    delayMicroseconds(2);
-    digitalWrite(PIN_ULTRASONIC_TRIG, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
-
-    long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 20000); // 20ms timeout ~3.4m
-    if (duration == 0) return 0;
-    // distance = duration * speed_of_sound / 2 (343 m/s)
-    uint16_t distMm = (uint16_t)((duration * 343) / 2000); // microseconds to mm
-    return distMm;
+    // FIXED: Improved ultrasonic measurement with timeout and averaging
+    const int numReadings = 3;
+    long totalDuration = 0;
+    int validReadings = 0;
+    
+    for (int i = 0; i < numReadings; i++) {
+      digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
+      delayMicroseconds(2);
+      digitalWrite(PIN_ULTRASONIC_TRIG, HIGH);
+      delayMicroseconds(10);
+      digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
+      
+      // Timeout after 30ms (max ~5m range)
+      long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 30000);
+      
+      if (duration > 0 && duration < 25000) {  // Valid range: 4mm to 4m
+        totalDuration += duration;
+        validReadings++;
+      }
+      
+      if (i < numReadings - 1) delayMicroseconds(100);
+    }
+    
+    if (validReadings == 0) return 0;  // No valid reading
+    
+    // Calculate average distance
+    long avgDuration = totalDuration / validReadings;
+    uint16_t distance = (avgDuration * 343) / 2000;  // Speed of sound: 343 m/s
+    
+    // Filter unrealistic values
+    if (distance < 20 || distance > 4000) return 0;
+    
+    // Debug output
+    static unsigned long lastDistDebug = 0;
+    static uint16_t lastDist = 0;
+    if (millis() - lastDistDebug > 1000 && abs(distance - lastDist) > 50) {
+      Serial.printf("[ULTRASONIC] Distance: %d mm (%d valid readings)\n", distance, validReadings);
+      lastDistDebug = millis();
+      lastDist = distance;
+    }
+    
+    return distance;
   }
 
-  void initMic() {
-    i2s_config_t config = {
-      .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-      .sample_rate = 16000,
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-      .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-      .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-      .dma_buf_count = 4,
-      .dma_buf_len = 256,
-      .use_apll = false,
-      .tx_desc_auto_clear = false,
-      .fixed_mclk = 0
-    };
-
-    i2s_pin_config_t pins = {
-      .bck_io_num = PIN_I2S_MIC_SCK,
-      .ws_io_num = PIN_I2S_MIC_WS,
-      .data_out_num = I2S_PIN_NO_CHANGE,
-      .data_in_num = PIN_I2S_MIC_SD
-    };
-
-    if (i2s_driver_install(MIC_PORT, &config, 0, nullptr) != ESP_OK) return;
-    if (i2s_set_pin(MIC_PORT, &pins) != ESP_OK) return;
-    micReady_ = true;
-  }
-
-  uint16_t sampleMicLevel() {
-    if (!micReady_) return 0;
-
-    int16_t samples[128];
-    size_t bytesRead = 0;
-    // Non-blocking read; if no data, return 0
-    if (i2s_read(MIC_PORT, samples, sizeof(samples), &bytesRead, 2) != ESP_OK || bytesRead == 0) {
-      return 0;
-    }
-
-    int count = bytesRead / sizeof(int16_t);
-    uint32_t acc = 0;
-    for (int i = 0; i < count; ++i) {
-      acc += abs(samples[i]);
-    }
-    uint16_t avg = count > 0 ? acc / count : 0;
-    return avg;
+  bool isTriggered() {
+    SensorData data = read();
+    return data.motion || data.touchHead || data.touchSide || data.distance_mm > 0;
   }
 };
 
-#endif // SENSORS_H
+#endif

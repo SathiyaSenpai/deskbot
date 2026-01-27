@@ -1,0 +1,18 @@
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+monitor_speed = 115200
+monitor_filters = direct
+upload_speed = 115200
+
+; INCREASE FLASH SIZE (Required for Audio buffering)
+board_build.partitions = huge_app.csv
+
+lib_deps =
+  bblanchon/ArduinoJson @ ^6.21.3
+  links2004/WebSockets @ ^2.4.1
+  olikraus/U8g2 @ ^2.35.9
+  adafruit/Adafruit NeoPixel @ ^1.12.0
+  madhephaestus/ESP32Servo @ ^1.2.1
+  esphome/ESP32-audioI2S @ ^2.0.7  ; <--- THIS IS THE MISSING KEY

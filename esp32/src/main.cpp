@@ -1,5 +1,10 @@
+// ============================================================================
+// COMPLETE FIXED main.cpp - ALL TIMING ISSUES RESOLVED
+// ============================================================================
+
 #include <Arduino.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <U8g2lib.h>
 #include <ArduinoJson.h>
 #include "config.h"
@@ -11,370 +16,484 @@
 #include "servo_controller.h"
 #include "websocket_client.h"
 #include "audio_manager.h"
+#include "mic_manager.h"
 #include "wifi_manager.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
-// OLED: choose driver (SSD1306 128x64). If you see a vertical offset, switch to SH1106.
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, /* reset=*/ U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
-
+// --- OBJECTS ---
+U8G2_SH1106_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
 EyeEngine eye(display);
 SensorManager sensors;
 LedController leds;
 ServoController servo;
-RobotWebSocket ws;
+RobotWebSocket robotWs;
 AudioManager audioMgr;
+MicManager micMgr;
+WiFiManager wifiMgr;
 
-// Timing
-unsigned long lastFrameMs = 0;
-unsigned long lastSensorMs = 0;
-unsigned long lastPingMs = 0;
-unsigned long lastWsReconnectMs = 0;
-unsigned long buttonHoldStart = 0;
-const uint32_t FRAME_INTERVAL = 33;     // ~30 fps
-const uint32_t SENSOR_INTERVAL = 500;    // sensor push every 0.5s
-const uint32_t PING_INTERVAL = 5000;     // status every 5s
-const uint32_t RESET_HOLD_TIME = 5000;   // Hold button 5s to reset WiFi
-
-// Current robot state
-const char* robotState = "idle";
-bool inSetupMode = false;
-
-// Touch debounce helpers
-bool headTouchedDebounced();
-
-// Forward declarations
-void handleMessage(const char* type, JsonDocument& doc);
-void showSetupScreen();
-void showConnectingScreen(const char* ssid);
-void showConnectedScreen();
-
-void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println("\n🤖 EMO Deskbot Starting...");
-
-  // Initialize display first (for status messages)
-  display.begin();
-  display.setContrast(255);
-  display.setFont(u8g2_font_6x10_tf);
-
-  // Initialize WiFi Manager
-  wifiManager.begin();
-  
-  // Check if reset button is held during boot
-  pinMode(PIN_TOUCH_HEAD, INPUT);
-  if (touchRead(PIN_TOUCH_HEAD) < 40) {  // Touch detected
-    Serial.println("[Boot] Reset button held, starting setup portal");
-    inSetupMode = true;
-    showSetupScreen();
-    wifiManager.startPortal();
-  } else {
-    // Try auto-connect
-    showConnectingScreen(WIFI_SSID);
-    if (!wifiManager.autoConnect()) {
-      Serial.println("[Boot] WiFi failed, starting setup portal");
-      inSetupMode = true;
-      showSetupScreen();
-      wifiManager.startPortal();
-    }
-  }
-
-  // Initialize other components
-  sensors.begin();
-  leds.begin();
-  servo.begin();
-  audioMgr.begin();
-
-  // Set initial behavior
-  eye.setBehavior("calm_idle");
-
-  // Setup WebSocket with dynamic server from WiFiManager
-  if (wifiManager.isConnected) {
-    ws.setServer(wifiManager.getServerIP().c_str(), wifiManager.getServerPort());
-    ws.setCallback(handleMessage);
-    ws.begin();
-    showConnectedScreen();
-    audioMgr.playChirp();
-  }
-
-  Serial.println("Ready! Type 'help' for commands.");
-}
-
-// Forward declaration
-void handleSerialCommand(String cmd);
-
-void loop() {
-  // Handle WiFi setup portal if active
-  if (wifiManager.isPortalRunning()) {
-    wifiManager.handlePortal();
+// --- SOUND MANAGER ---
+class SoundManager {
+public:
+  void update() {
+    if (!active) return;
     
-    // Show setup animation
-    eye.setBehavior("curious_idle");
-    eye.update(0.033);
-    eye.render();
-    delay(33);
-    return;
-  }
-
-  const unsigned long now = millis();
-
-  // Attempt WS reconnect when WiFi is up
-  if (WiFi.status() == WL_CONNECTED && !ws.connected() && (now - lastWsReconnectMs) >= WS_RECONNECT_INTERVAL) {
-    lastWsReconnectMs = now;
-    wifiManager.currentIP = WiFi.localIP().toString();
-    ws.setServer(wifiManager.getServerIP().c_str(), wifiManager.getServerPort());
-    ws.begin();
-    showConnectedScreen();
-  }
-
-  ws.loop();
-
-  // Handle Serial commands for testing without WebSocket
-  if (Serial.available()) {
-    String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
-    if (cmd.length() > 0) {
-      handleSerialCommand(cmd);
+    unsigned long now = millis();
+    if (now - lastUpdate >= noteDuration) {
+      if (noteIndex < sequenceLength) {
+        int freq = sequence[noteIndex * 2];
+        noteDuration = sequence[noteIndex * 2 + 1];
+        
+        if (freq > 0) tone(PIN_BUZZER, freq);
+        else noTone(PIN_BUZZER);
+        
+        lastUpdate = now;
+        noteIndex++;
+      } else {
+        noTone(PIN_BUZZER);
+        active = false;
+      }
     }
+  }
+
+  void play(const char* name) {
+    if (active) return;
+    
+    noteIndex = 0;
+    active = true;
+    lastUpdate = millis();
+
+    if (strcmp(name, "startup") == 0) {
+      setNote(0, 880, 100); setNote(1, 1046, 100); setNote(2, 1318, 200);
+      sequenceLength = 3;
+    } 
+    else if (strcmp(name, "happy") == 0) {
+      setNote(0, 1568, 80); setNote(1, 0, 50); setNote(2, 2093, 100);
+      sequenceLength = 3;
+    }
+    else if (strcmp(name, "sad") == 0) {
+      setNote(0, 440, 200); setNote(1, 392, 300); setNote(2, 349, 400);
+      sequenceLength = 3;
+    }
+    else if (strcmp(name, "surprised") == 0) {
+      setNote(0, 2000, 50); setNote(1, 2500, 50);
+      sequenceLength = 2;
+    }
+    else if (strcmp(name, "curious") == 0) {
+      setNote(0, 523, 100); setNote(1, 659, 100); setNote(2, 784, 150);
+      sequenceLength = 3;
+    }
+    else if (strcmp(name, "sleep") == 0) {
+      setNote(0, 300, 300); setNote(1, 200, 400);
+      sequenceLength = 2;
+    }
+  }
+
+private:
+  bool active = false;
+  unsigned long lastUpdate = 0;
+  int sequence[20];
+  int sequenceLength = 0;
+  int noteIndex = 0;
+  int noteDuration = 0;
+
+  void setNote(int idx, int freq, int dur) {
+    sequence[idx * 2] = freq;
+    sequence[idx * 2 + 1] = dur;
+  }
+} soundFx;
+
+// --- STATE VARIABLES ---
+const Behavior* activeBehavior = nullptr;
+unsigned long behaviorStartTime = 0;  // CRITICAL: Renamed for clarity
+unsigned long lastInteractionTime = 0;
+unsigned long lastIdleCheckTime = 0;
+bool inSleepMode = false;
+bool inDarkSleepMode = false;
+
+const unsigned long IDLE_TO_SLEEPY_DELAY = 20000;
+
+// --- BEHAVIOR CONTROLLER ---
+void startBehavior(const char* name) {
+  const Behavior* b = findBehavior(name);
+  if (!b) return;
+
+  Serial.printf("\n[BEHAVIOR] ===== STARTING: %s =====\n", name);
+
+  // Reset interaction timer for non-sleep behaviors
+  if (strcmp(name, "sleeping") != 0 && strcmp(name, "sleepy_idle") != 0) {
+    inSleepMode = false;
+    inDarkSleepMode = false;
+    lastInteractionTime = millis();
+    Serial.println("[BEHAVIOR] Reset interaction timer");
+  }
+
+  // Protect active states from sleepy override
+  if (strcmp(name, "sleepy_idle") == 0) {
+    if (activeBehavior && (strcmp(activeBehavior->name, "happy") == 0 ||
+                           strcmp(activeBehavior->name, "surprised") == 0 ||
+                           strcmp(activeBehavior->name, "listening") == 0)) {
+      Serial.println("[BEHAVIOR] Blocked sleepy (active emotion)");
+      return; 
+    }
+    inSleepMode = true;
+  }
+  else if (strcmp(name, "sleeping") == 0) {
+    inDarkSleepMode = true;
+  }
+
+  activeBehavior = b;
+  behaviorStartTime = millis();  // CRITICAL: Record start time
+  
+  // Calculate total duration
+  unsigned long totalDuration = b->entryTime + b->holdTime + b->exitTime;
+  Serial.printf("[BEHAVIOR] Timing: entry=%dms hold=%dms exit=%dms TOTAL=%dms\n",
+                b->entryTime, b->holdTime, b->exitTime, totalDuration);
+  
+  // 1. SET EYE TARGET
+  Serial.println("[BEHAVIOR] Setting eye target...");
+  eye.setTarget(b);
+  
+  // 2. SET LED MOOD
+  Serial.print("[BEHAVIOR] Setting LED mood: ");
+  if (b->ledEffect) {
+    Serial.println(b->ledEffect);
+    leds.setMood(b->ledEffect);
+  } else {
+    Serial.println(name);
+    leds.setMood(name);
   }
   
-  // Check for WiFi reset (hold touch for 5 seconds)
-  if (headTouchedDebounced()) {
-    if (buttonHoldStart == 0) {
-      buttonHoldStart = millis();
-    } else if (millis() - buttonHoldStart > RESET_HOLD_TIME) {
-      Serial.println("[Reset] Touch held 5s, resetting WiFi...");
-      leds.setRGB(255, 0, 0);  // Red flash
-      delay(500);
-      wifiManager.resetCredentials();  // This restarts ESP32
+  // 3. SERVO & SOUND ACTIONS
+  if (strcmp(name, "happy") == 0) {
+    Serial.println("[BEHAVIOR] Servo: NOD gesture");
+    servo.triggerGesture("nod");
+    soundFx.play("happy");
+  } 
+  else if (strcmp(name, "shy_happy") == 0) {
+    Serial.println("[BEHAVIOR] Servo: NOD gesture (shy)");
+    servo.triggerGesture("nod");
+    soundFx.play("happy");
+  }
+  else if (strcmp(name, "sad") == 0) {
+    Serial.println("[BEHAVIOR] Servo: DROOP (120°)");
+    servo.setTarget(120); 
+    soundFx.play("sad");
+  }
+  else if (strcmp(name, "surprised") == 0 || strcmp(name, "startled") == 0) {
+    Serial.println("[BEHAVIOR] Servo: ALERT (80°)");
+    servo.setTarget(80); 
+    soundFx.play("surprised");
+  }
+  else if (strcmp(name, "curious_idle") == 0) {
+    Serial.println("[BEHAVIOR] Servo: TILT gesture");
+    servo.triggerGesture("tilt");
+    soundFx.play("curious");
+  }
+  else if (strcmp(name, "sleepy_idle") == 0 || strcmp(name, "sleeping") == 0) {
+    Serial.println("[BEHAVIOR] Servo: SLEEPY (110°)");
+    servo.setTarget(110);
+    if (strcmp(name, "sleepy_idle") == 0) {
+      soundFx.play("sleep");
     }
-  } else {
-    buttonHoldStart = 0;
+  }
+  else if (strcmp(name, "listening") == 0) {
+    Serial.println("[BEHAVIOR] Servo: CENTER (90°)");
+    servo.setTarget(90);
+  }
+  else if (strcmp(name, "calm_idle") == 0) {
+    Serial.println("[BEHAVIOR] Servo: CENTER (90°)");
+    servo.setTarget(90);
+  }
+  else if (strcmp(name, "confused") == 0) {
+    Serial.println("[BEHAVIOR] Servo: TILT (110°)");
+    servo.setTarget(110);
+  }
+  else if (strcmp(name, "thinking") == 0) {
+    Serial.println("[BEHAVIOR] Servo: TILT (100°)");
+    servo.setTarget(100);
+  }
+  else if (strcmp(name, "playful_mischief") == 0) {
+    Serial.println("[BEHAVIOR] Servo: SHAKE gesture");
+    servo.triggerGesture("shake");
   }
 
-  if (now - lastFrameMs >= FRAME_INTERVAL) {
-    lastFrameMs = now;
-    eye.update(FRAME_INTERVAL / 1000.0f);
-    eye.render();
+  if (robotWs.isConnected()) {
+    robotWs.sendStatus("sync_behavior", name);
   }
-
-  if (now - lastSensorMs >= SENSOR_INTERVAL) {
-    lastSensorMs = now;
-    auto data = sensors.read();
-    ws.sendSensors(data);
-  }
-
-  if (now - lastPingMs >= PING_INTERVAL) {
-    lastPingMs = now;
-    ws.sendStatus(robotState, eye.getBehavior());
-  }
-}
-
-// Simple debounced head-touch read to avoid false resets
-bool headTouchedDebounced() {
-  static uint8_t stableCount = 0;
-  int val = touchRead(PIN_TOUCH_HEAD);
-  if (val < TOUCH_THRESHOLD) {
-    if (stableCount < 10) stableCount++;
-  } else if (val > TOUCH_THRESHOLD + 5 && stableCount > 0) {
-    stableCount--;
-  }
-  return stableCount >= 3;
-}
-
-// ============================================================================
-// DISPLAY HELPERS
-// ============================================================================
-
-void showSetupScreen() {
-  display.clearBuffer();
-  display.setFont(u8g2_font_6x10_tf);
-  display.drawStr(20, 15, "EMO Setup Mode");
-  display.drawStr(10, 30, "Connect to WiFi:");
-  display.drawStr(10, 42, WIFI_MANAGER_AP_NAME);
-  display.drawStr(10, 54, "Pass: emo12345");
-  display.sendBuffer();
-}
-
-void showConnectingScreen(const char* ssid) {
-  display.clearBuffer();
-  display.setFont(u8g2_font_6x10_tf);
-  display.drawStr(20, 25, "Connecting to:");
-  display.drawStr(10, 40, ssid);
-  display.drawStr(40, 55, "...");
-  display.sendBuffer();
-}
-
-void showConnectedScreen() {
-  display.clearBuffer();
-  display.setFont(u8g2_font_6x10_tf);
-  display.drawStr(30, 25, "Connected!");
-  display.drawStr(10, 40, wifiManager.currentIP.c_str());
-  display.sendBuffer();
-  delay(1500);
+  
+  Serial.printf("[BEHAVIOR] ===== STARTED: %s =====\n\n", name);
 }
 
 void handleMessage(const char* type, JsonDocument& doc) {
-  Serial.printf("[WS] Received: %s\n", type);
-  
   if (strcmp(type, "set_behavior") == 0) {
-    const char* b = doc["name"] | "calm_idle";
-    if (findBehavior(b)) {
-      eye.setBehavior(b);
-      robotState = "reacting";
-      audioMgr.playChirp();
-      Serial.printf("[WS] Behavior set to: %s\n", b);
-    } else {
-      Serial.printf("[WS] Unknown behavior: %s\n", b);
+    startBehavior(doc["name"]);
+  }
+  else if (strcmp(type, "servo_action") == 0) {
+    servo.setTarget(doc["angle"]);
+    lastInteractionTime = millis();
+  }
+  else if (strcmp(type, "play_audio") == 0) {
+    startBehavior("listening");
+    audioMgr.playFromURLAsync(doc["url"]);
+  }
+  else if (strcmp(type, "request_state") == 0) {
+    if (activeBehavior && robotWs.isConnected()) {
+      robotWs.sendStatus("sync_behavior", activeBehavior->name);
     }
-  } else if (strcmp(type, "set_led") == 0) {
-    uint8_t r = doc["r"] | 0;
-    uint8_t g = doc["g"] | 0;
-    uint8_t b = doc["b"] | 0;
-    leds.setRGB(r, g, b);
-    Serial.printf("[WS] LED set to: %d,%d,%d\n", r, g, b);
-  } else if (strcmp(type, "set_servo") == 0) {
-    int angle = doc["angle"] | 90;
-    servo.setAngle(angle);
-    Serial.printf("[WS] Servo set to: %d\n", angle);
-  } else if (strcmp(type, "play_sound") == 0) {
-    const char* s = doc["name"] | "chirp";
-    if (strcmp(s, "chirp") == 0) audioMgr.playChirp();
-    else if (strcmp(s, "happy") == 0) audioMgr.playHappy();
-    else if (strcmp(s, "sad") == 0) audioMgr.playSad();
-    else if (strcmp(s, "alert") == 0) audioMgr.playAlert();
-    else audioMgr.playTone(1000, 150);
-    Serial.printf("[WS] Sound: %s\n", s);
-  } else if (strcmp(type, "play_audio") == 0) {
-    const char* url = doc["url"] | "";
-    if (strlen(url) > 0) {
-      Serial.printf("[WS] Playing audio from: %s\n", url);
-      audioMgr.playFromURLAsync(url);
-    }
-  } else if (strcmp(type, "ping") == 0) {
-    // Respond to heartbeat
-    StaticJsonDocument<64> pong;
-    pong["type"] = "pong";
-    ws.send(pong);
-  } else if (strcmp(type, "welcome") == 0) {
-    Serial.println("[WS] Server acknowledged connection");
-  } else {
-    Serial.printf("[WS] Unknown message type: %s\n", type);
   }
 }
 
-// ============================================================================
-// SERIAL COMMAND HANDLER (for testing without WebSocket)
-// ============================================================================
-void handleSerialCommand(String cmd) {
-  Serial.print("> ");
-  Serial.println(cmd);
+// --- SETUP ---
+void setup() {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  Serial.begin(115200);
+  delay(500);
+  
+  Serial.println("\n\n========================================");
+  Serial.println("  EMO DESKBOT - TIMING FIX VERSION");
+  Serial.println("========================================\n");
 
-  // Help command
-  if (cmd == "help") {
-    Serial.println("=== AVAILABLE COMMANDS ===");
-    Serial.println("set_behavior:<name>  - Change eye expression");
-    Serial.println("  Names: calm_idle, happy, sleepy_idle, curious_idle,");
-    Serial.println("         shy_happy, startled, thinking, soft_sad,");
-    Serial.println("         listening_focused, processing, embarrassed,");
-    Serial.println("         playful_mischief, disappointed, sleeping_deep");
-    Serial.println("set_led:<r>,<g>,<b>  - Set LED color (0-255 each)");
-    Serial.println("set_servo:<angle>    - Move servo (0-180)");
-    Serial.println("play_sound:chirp     - Play chirp sound");
-    Serial.println("play_sound:alert     - Play alert sound");
-    Serial.println("print_sensors        - Show all sensor values");
-    Serial.println("status               - Show current state");
-    Serial.println("==========================");
-    return;
+  Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+  
+  Serial.println("[INIT] Display...");
+  display.begin();
+  display.clearBuffer();
+  display.setFont(u8g2_font_ncenB08_tr);
+  display.drawStr(10, 30, "DeskBot Init...");
+  display.sendBuffer();
+  
+  Serial.println("[INIT] LEDs...");
+  leds.begin();
+  
+  Serial.println("[INIT] Servo...");
+  servo.begin();
+  
+  Serial.println("[INIT] Sensors...");
+  sensors.begin();
+  
+  Serial.println("[INIT] Sound...");
+  soundFx.play("startup");
+
+  Serial.println("[INIT] WiFi...");
+  wifiMgr.begin();
+  if (wifiMgr.autoConnect()) {
+      Serial.println("[INIT] Audio...");
+      audioMgr.begin();
+      robotWs.setServer(wifiMgr.getServerIP().c_str(), wifiMgr.getServerPort());
+      robotWs.setCallback(handleMessage);
+      robotWs.begin();
   }
+  
+  Serial.println("[INIT] Eyes...");
+  eye.startBootSequence();
+  
+  Serial.println("[INIT] Starting calm_idle...");
+  startBehavior("calm_idle");
+  lastInteractionTime = millis();
+  lastIdleCheckTime = millis();
+  
+  Serial.println("\n========================================");
+  Serial.println("  INITIALIZATION COMPLETE!");
+  Serial.println("========================================\n");
+}
 
-  // Status command
-  if (cmd == "status") {
-    Serial.printf("Behavior: %s\n", eye.getBehavior());
-    Serial.printf("State: %s\n", robotState);
-    Serial.printf("WiFi: %s\n", WiFi.status() == WL_CONNECTED ? "connected" : "disconnected");
-    Serial.printf("WebSocket: %s\n", ws.connected() ? "connected" : "disconnected");
-    return;
-  }
+void loop() {
+  static unsigned long lastTime = 0;
+  unsigned long now = millis();
+  float dt = (now - lastTime) / 1000.0f;
+  lastTime = now;
 
-  // Print sensors command
-  if (cmd == "print_sensors") {
-    auto data = sensors.read();
-    Serial.println("=== SENSOR VALUES ===");
-    Serial.printf("Light (LDR):     %d (0-4095)\n", data.light);
-    Serial.printf("Motion (PIR):    %s\n", data.motion ? "DETECTED" : "none");
-    Serial.printf("Distance:        %d mm\n", data.distance_mm);
-    Serial.printf("Touch Head:      %s\n", data.touchHead ? "TOUCHED" : "no");
-    Serial.printf("Touch Side:      %s\n", data.touchSide ? "TOUCHED" : "no");
-    Serial.println("=====================");
-    return;
-  }
-
-  // set_behavior:name
-  if (cmd.startsWith("set_behavior:")) {
-    String name = cmd.substring(13);
-    name.trim();
-    if (findBehavior(name.c_str())) {
-      eye.setBehavior(name.c_str());
-      robotState = "reacting";
-      Serial.printf("OK: Behavior set to '%s'\n", name.c_str());
-    } else {
-      Serial.printf("ERROR: Unknown behavior '%s'\n", name.c_str());
-      Serial.println("Type 'help' to see available behaviors");
+  // 1. Critical Loops
+  if (WiFi.status() == WL_CONNECTED) {
+    robotWs.loop();
+    audioMgr.loop();
+    
+    static bool initialStateSent = false;
+    static unsigned long connectionTime = 0;
+    if (robotWs.isConnected() && activeBehavior && !initialStateSent) {
+      if (connectionTime == 0) connectionTime = now;
+      if (now - connectionTime > 500) {
+        robotWs.sendStatus("sync_behavior", activeBehavior->name);
+        initialStateSent = true;
+      }
     }
-    return;
-  }
-
-  // set_led:r,g,b
-  if (cmd.startsWith("set_led:")) {
-    String rgb = cmd.substring(8);
-    int r = 0, g = 0, b = 0;
-    int idx1 = rgb.indexOf(',');
-    int idx2 = rgb.lastIndexOf(',');
-    if (idx1 > 0 && idx2 > idx1) {
-      r = rgb.substring(0, idx1).toInt();
-      g = rgb.substring(idx1 + 1, idx2).toInt();
-      b = rgb.substring(idx2 + 1).toInt();
-      r = constrain(r, 0, 255);
-      g = constrain(g, 0, 255);
-      b = constrain(b, 0, 255);
-      leds.setRGB(r, g, b);
-      Serial.printf("OK: LED set to RGB(%d, %d, %d)\n", r, g, b);
-    } else {
-      Serial.println("ERROR: Use format set_led:255,0,0");
+    if (!robotWs.isConnected()) {
+      initialStateSent = false;
+      connectionTime = 0;
     }
-    return;
+  } else {
+    wifiMgr.handlePortal();
   }
 
-  // set_servo:angle
-  if (cmd.startsWith("set_servo:")) {
-    int angle = cmd.substring(10).toInt();
-    angle = constrain(angle, 0, 180);
-    servo.setAngle(angle);
-    Serial.printf("OK: Servo set to %d degrees\n", angle);
-    return;
-  }
+  // 2. Component Updates - MUST UPDATE EVERY FRAME
+  eye.update(dt);
+  eye.render();
+  leds.loop(dt);
+  servo.loop(dt);
+  soundFx.update();
 
-  // play_sound:name
-  if (cmd.startsWith("play_sound:")) {
-    String name = cmd.substring(11);
-    name.trim();
-    if (name == "chirp") {
-      audioMgr.playChirp();
-      Serial.println("OK: Playing chirp");
-    } else if (name == "alert") {
-      audioMgr.playTone(1000, 100);
-      delay(50);
-      audioMgr.playTone(1000, 100);
-      delay(50);
-      audioMgr.playTone(1000, 100);
-      Serial.println("OK: Playing alert");
-    } else {
-      audioMgr.playTone(800, 150);
-      Serial.println("OK: Playing tone");
+  // 3. Sensor Logic
+  static unsigned long lastSensor = 0;
+  static int sustainedSoundCounter = 0;
+  static bool wasMotionDetected = false;
+  static bool wasTouchDetected = false;
+  static uint16_t lastDistance = 0;
+  static int darknessCounter = 0;
+  static int lightCounter = 0;
+
+  if (now - lastSensor > 100) {
+    lastSensor = now;
+    SensorData d = sensors.read();
+    bool activityDetected = false;
+    
+    // Microphone protection during servo movement only
+    bool servoIsMoving = servo.isMoving();
+    
+    // 1. TOUCH - Always highest priority
+    if (d.touchHead && !wasTouchDetected) {
+      wasTouchDetected = true;
+      Serial.println("\n[TOUCH] HEAD TOUCHED!");
+      startBehavior("happy"); 
+      activityDetected = true;
+    } 
+    else if (d.touchSide && !wasTouchDetected) {
+      wasTouchDetected = true;
+      Serial.println("\n[TOUCH] SIDE TOUCHED!");
+      startBehavior("shy_happy");
+      activityDetected = true;
+    } 
+    else if (!d.touchHead && !d.touchSide) {
+      wasTouchDetected = false;
     }
-    return;
-  }
 
-  // Unknown command
-  Serial.printf("Unknown command: '%s'. Type 'help' for commands.\n", cmd.c_str());
+    // 2. MOTION - Always responsive
+    if (d.motion && !wasMotionDetected) {
+      wasMotionDetected = true;
+      Serial.println("\n[MOTION] DETECTED!");
+      startBehavior("surprised");
+      activityDetected = true;
+    } else if (!d.motion) {
+      wasMotionDetected = false;
+    }
+    
+    // 3. DISTANCE - Always responsive
+    if (d.distance_mm > 0 && d.distance_mm < 150) {
+      if (lastDistance >= 150 || lastDistance == 0) {
+        Serial.printf("\n[DISTANCE] Close: %dmm\n", d.distance_mm);
+        startBehavior("surprised");
+        activityDetected = true;
+      }
+    } 
+    else if (d.distance_mm > 150 && d.distance_mm < 400) {
+      if (lastDistance >= 400 || lastDistance < 150) {
+        Serial.printf("\n[DISTANCE] Medium: %dmm\n", d.distance_mm);
+        startBehavior("curious_idle");
+        activityDetected = true;
+      }
+    }
+    lastDistance = d.distance_mm;
+
+    // 4. MICROPHONE - Only when servo not moving
+    #if ENABLE_MICROPHONE
+    int vol = micMgr.getLoudness();
+    
+    if (!servoIsMoving) {
+      if (vol > 40) {
+        Serial.printf("\n[MIC] Loud sound: %d\n", vol);
+        startBehavior("surprised");
+        activityDetected = true;
+      } 
+      else if (vol > 15) {
+        sustainedSoundCounter++;
+        if (sustainedSoundCounter > 10) {
+          Serial.printf("\n[MIC] Sustained: %d\n", vol);
+          startBehavior("listening");
+          activityDetected = true;
+        }
+      } else {
+        if (sustainedSoundCounter > 0) sustainedSoundCounter--;
+      }
+      
+      if (vol > 10) leds.voiceReact(vol);
+    }
+    #endif
+
+    // 5. Reset timers on activity
+    if (activityDetected) {
+      lastInteractionTime = now;
+      darknessCounter = 0;
+      lightCounter = 0;
+      inSleepMode = false;
+      inDarkSleepMode = false;
+    }
+
+    // 6. DARKNESS LOGIC
+    if (now - lastInteractionTime > 15000) { 
+      if (d.light > 3000) { 
+        darknessCounter++;
+        lightCounter = 0;
+        
+        if (darknessCounter > 30 && !inDarkSleepMode) { 
+          Serial.println("\n[DARK] Going to sleep...");
+          startBehavior("sleeping");
+        }
+      } 
+      else {
+        lightCounter++;
+        if (lightCounter > 10) { 
+          darknessCounter = 0;
+          if (inDarkSleepMode) {
+            Serial.println("\n[LIGHT] Waking up!");
+            startBehavior("calm_idle");
+          }
+        }
+      }
+    } else {
+      darknessCounter = 0;
+      lightCounter = 0;
+    }
+
+    if (robotWs.isConnected()) robotWs.sendSensors(d);
+  }
+  
+  // 4. Idle Management
+  if (now - lastIdleCheckTime > 1000) {
+    lastIdleCheckTime = now;
+    unsigned long idleTime = now - lastInteractionTime;
+    
+    if (!inDarkSleepMode && activeBehavior && idleTime > IDLE_TO_SLEEPY_DELAY && !inSleepMode) {
+      if (strcmp(activeBehavior->name, "sleepy_idle") != 0 && 
+          strcmp(activeBehavior->name, "sleeping") != 0) {
+        Serial.println("\n[IDLE] 20s timeout -> Sleepy");
+        startBehavior("sleepy_idle");
+      }
+    }
+  }
+  
+  // 5. CRITICAL FIX: Auto-return from timed behaviors
+  // ONLY check this if behavior has a holdTime > 0
+  if (activeBehavior && activeBehavior->holdTime > 0) {
+    unsigned long elapsed = now - behaviorStartTime;
+    unsigned long totalDuration = activeBehavior->entryTime + 
+                                   activeBehavior->holdTime + 
+                                   activeBehavior->exitTime;
+    
+    // Debug every second during behavior
+    static unsigned long lastBehaviorDebug = 0;
+    if (now - lastBehaviorDebug > 1000) {
+      Serial.printf("[BEHAVIOR TIMING] %s: elapsed=%lums / total=%lums (%.1f%%)\n",
+                    activeBehavior->name, elapsed, totalDuration, 
+                    (float)elapsed / totalDuration * 100.0f);
+      lastBehaviorDebug = now;
+    }
+    
+    if (elapsed > totalDuration) {
+      Serial.printf("\n[AUTO-RETURN] %s completed (ran for %lums) -> calm_idle\n", 
+                    activeBehavior->name, elapsed);
+      startBehavior("calm_idle");
+    }
+  }
+  
+  yield();
 }

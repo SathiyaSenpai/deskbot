@@ -9,100 +9,101 @@
 
 class RobotWebSocket {
 public:
-  using MessageCallback = std::function<void(const char* type, JsonDocument& doc)>;
+  using MessageCallback = std::function<void(const char*, JsonDocument&)>;
 
-  // Set server dynamically (from WiFiManager)
+private:
+  WebSocketsClient ws;
+  bool connected = false;
+  MessageCallback callback;
+  String serverHost;
+  int serverPort;
+
+  void handleEvent(WStype_t type, uint8_t* payload, size_t len) {
+    switch(type) {
+      case WStype_DISCONNECTED:
+        if (connected) Serial.println("[WS] Disconnected");
+        connected = false;
+        break;
+        
+      case WStype_CONNECTED:
+        Serial.printf("[WS] Connected to %s\n", (char*)payload);
+        connected = true;
+        sendStatus("connect", "online");
+        // Send current behavior state immediately after connection for sync
+        // Note: This will be called from main.cpp after activeBehavior is set
+        break;
+        
+      case WStype_TEXT:
+        if (callback) {
+          StaticJsonDocument<1024> doc;
+          DeserializationError err = deserializeJson(doc, payload);
+          if (!err) {
+            const char* type = doc["type"];
+            if (type) callback(type, doc);
+          }
+        }
+        break;
+        
+      default:
+        break;
+    }
+  }
+
+public:
   void setServer(const char* host, int port) {
-    serverHost_ = String(host);
-    serverPort_ = port;
+    serverHost = host;
+    serverPort = port;
   }
 
   void begin() {
-    // Use dynamic server if set, otherwise use defaults from config
-    if (serverHost_.length() > 0) {
-      ws_.begin(serverHost_.c_str(), serverPort_, WS_PATH);
-    } else {
-      ws_.begin(WS_HOST, WS_PORT, WS_PATH);
-    }
-    ws_.onEvent([this](WStype_t type, uint8_t* payload, size_t len){ handle(type, payload, len); });
-    ws_.setReconnectInterval(5000);
-    Serial.printf("[WS] Connecting to %s:%d\n", 
-                  serverHost_.length() > 0 ? serverHost_.c_str() : WS_HOST, 
-                  serverHost_.length() > 0 ? serverPort_ : WS_PORT);
+    const char* host = serverHost.length() > 0 ? serverHost.c_str() : WS_HOST;
+    int port = serverPort > 0 ? serverPort : WS_PORT;
+
+    Serial.printf("[WS] Connecting to %s:%d%s\n", host, port, WS_PATH);
+    
+    ws.begin(host, port, WS_PATH);
+    ws.onEvent([this](WStype_t type, uint8_t* payload, size_t len) {
+      handleEvent(type, payload, len);
+    });
+    // Increased reconnect interval to reduce connection loop issues
+    ws.setReconnectInterval(10000);  // 10 seconds instead of 5
+    // More lenient heartbeat: 20s interval, 5s timeout, 3 retries
+    ws.enableHeartbeat(20000, 5000, 3);
   }
 
-  void loop() { ws_.loop(); }
-  bool connected() const { return connected_; }
-  void setCallback(MessageCallback cb) { cb_ = cb; }
+  void loop() { ws.loop(); }
+  bool isConnected() { return connected; }
+  void setCallback(MessageCallback cb) { callback = cb; }
 
-  // Send a JSON document
-  void send(JsonDocument& doc) {
-    String out;
-    serializeJson(doc, out);
-    ws_.sendTXT(out);
-  }
-
-  void sendStatus(const char* state, const char* behavior) {
+  void sendStatus(const char* event, const char* detail) {
+    if (!connected) return;
+    
     StaticJsonDocument<256> doc;
     doc["type"] = "robot_status";
-    doc["device"] = DEVICE_NAME;
-    doc["state"] = state;
-    doc["behavior"] = behavior;
-    doc["ts"] = millis();
-    send(doc);
+    doc["event"] = event;
+    doc["detail"] = detail;
+    
+    String output;
+    serializeJson(doc, output);
+    ws.sendTXT(output);
   }
 
-  template <class SensorData>
   void sendSensors(const SensorData& s) {
-    StaticJsonDocument<256> doc;
+    if (!connected) return;
+    
+    StaticJsonDocument<384> doc;
     doc["type"] = "sensor_data";
     doc["light"] = s.light;
     doc["motion"] = s.motion;
     doc["distance_mm"] = s.distance_mm;
     doc["touch_head"] = s.touchHead;
     doc["touch_side"] = s.touchSide;
-    doc["sound"] = s.soundLevel;
-    send(doc);
-  }
-
-private:
-  WebSocketsClient ws_;
-  bool connected_ = false;
-  MessageCallback cb_;
-  String serverHost_ = "";
-  int serverPort_ = 3000;
-
-  void handle(WStype_t type, uint8_t* payload, size_t len) {
-    switch (type) {
-      case WStype_CONNECTED: {
-        connected_ = true;
-        StaticJsonDocument<128> doc;
-        doc["type"] = "hello";
-        doc["device"] = DEVICE_NAME;
-        doc["version"] = FW_VERSION;
-        send(doc);
-        Serial.println("WebSocket connected");
-        break;
-      }
-      case WStype_DISCONNECTED:
-        connected_ = false;
-        Serial.println("WebSocket disconnected");
-        break;
-      case WStype_TEXT: {
-        StaticJsonDocument<512> doc;
-        auto err = deserializeJson(doc, payload, len);
-        if (err) {
-          Serial.printf("WS JSON error: %s\n", err.c_str());
-          return;
-        }
-        const char* t = doc["type"] | "unknown";
-        if (cb_) cb_(t, doc);
-        break;
-      }
-      default:
-        break;
-    }
+    doc["soundLevel"] = s.soundLevel;
+    
+    String output;
+    serializeJson(doc, output);
+    ws.sendTXT(output);
   }
 };
 
-#endif // WEBSOCKET_CLIENT_H
+#endif

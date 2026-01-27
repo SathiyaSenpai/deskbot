@@ -2,795 +2,133 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>EMO Deskbot Controller</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    :root {
-      --bg: #0a0a0f;
-      --card: #12121a;
-      --accent: #00d4ff;
-      --accent2: #ff6b6b;
-      --text: #ffffff;
-      --text-dim: #888;
-      --success: #4caf50;
-      --error: #f44336;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* Header */
-    .header {
-      background: var(--card);
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .header h1 {
-      font-size: 1.2rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .header h1 span {
-      font-size: 1.5rem;
-    }
-
-    .status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.85rem;
-    }
-
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--error);
-      transition: background 0.3s;
-    }
-
-    .status-dot.connected {
-      background: var(--success);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    /* Main Content */
-    .container {
-      padding: 16px;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    /* Section */
-    .section {
-      background: var(--card);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-
-    .section-title {
-      font-size: 0.9rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 16px;
-    }
-
-    /* Expression Grid */
-    .expression-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-    }
-
-    .expr-btn {
-      aspect-ratio: 1;
-      border: none;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.05);
-      color: var(--text);
-      font-size: 1.5rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-    }
-
-    .expr-btn span {
-      font-size: 0.6rem;
-      color: var(--text-dim);
-    }
-
-    .expr-btn:active {
-      transform: scale(0.95);
-      background: var(--accent);
-    }
-
-    .expr-btn.active {
-      background: var(--accent);
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-    }
-
-    /* Color Picker */
-    .color-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .color-btn {
-      width: 44px;
-      height: 44px;
-      border: 2px solid transparent;
-      border-radius: 50%;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .color-btn:active {
-      transform: scale(0.9);
-    }
-
-    .color-btn.active {
-      border-color: var(--text);
-      box-shadow: 0 0 15px currentColor;
-    }
-
-    .color-custom {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      border: none;
-      cursor: pointer;
-      background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
-    }
-
-    /* LED Effects */
-    .effect-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-      flex-wrap: wrap;
-    }
-
-    .effect-btn {
-      padding: 10px 16px;
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 20px;
-      background: transparent;
-      color: var(--text);
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .effect-btn:active, .effect-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-    }
-
-    /* Servo Slider */
-    .slider-container {
-      margin-top: 10px;
-    }
-
-    .slider-label {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      font-size: 0.9rem;
-    }
-
-    .slider {
-      width: 100%;
-      height: 8px;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.1);
-      -webkit-appearance: none;
-      appearance: none;
-    }
-
-    .slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: grab;
-    }
-
-    /* Quick Actions */
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
-
-    .action-btn {
-      padding: 16px;
-      border: none;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,212,255,0.05));
-      color: var(--text);
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .action-btn:active {
-      transform: scale(0.97);
-      background: var(--accent);
-    }
-
-    .action-btn.danger {
-      background: linear-gradient(135deg, rgba(255,107,107,0.2), rgba(255,107,107,0.05));
-    }
-
-    .action-btn.danger:active {
-      background: var(--accent2);
-    }
-
-    /* Sensor Display */
-    .sensor-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-
-    .sensor-item {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
-      padding: 12px;
-      text-align: center;
-    }
-
-    .sensor-item .icon {
-      font-size: 1.5rem;
-      margin-bottom: 4px;
-    }
-
-    .sensor-item .value {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--accent);
-    }
-
-    .sensor-item .label {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-      margin-top: 2px;
-    }
-
-    /* Connection Overlay */
-    .overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.9);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 20px;
-      text-align: center;
-    }
-
-    .overlay.hidden {
-      display: none;
-    }
-
-    .overlay h2 {
-      margin-bottom: 10px;
-    }
-
-    .overlay p {
-      color: var(--text-dim);
-      margin-bottom: 20px;
-    }
-
-    .spinner {
-      width: 50px;
-      height: 50px;
-      border: 3px solid rgba(255,255,255,0.1);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .retry-btn {
-      padding: 12px 24px;
-      background: var(--accent);
-      border: none;
-      border-radius: 8px;
-      color: var(--bg);
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    /* Toast */
-    .toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: var(--card);
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      transition: transform 0.3s;
-      z-index: 1001;
-    }
-
-    .toast.show {
-      transform: translateX(-50%) translateY(0);
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EMO-style AI desk robot control interface">
+  <title>EMO DeskBot - Control Dashboard</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Connection Overlay -->
-  <div class="overlay" id="overlay">
-    <div class="spinner"></div>
-    <h2>Connecting...</h2>
-    <p id="overlay-msg">Connecting to server</p>
-    <button class="retry-btn" id="retry-btn" style="display: none;">Retry</button>
-  </div>
 
-  <!-- Header -->
-  <header class="header">
-    <h1><span>🤖</span> EMO Bot</h1>
-    <div class="status">
-      <span id="status-text">Offline</span>
-      <div class="status-dot" id="status-dot"></div>
+  <!-- Top Status Bar -->
+  <header class="status-bar">
+    <div class="robot-name" id="robotName">🤖 EMO DeskBot</div>
+    <div class="connection" id="connectionStatus" data-status="disconnected">
+      <span class="status-indicator">●</span>
+      <span class="status-text">Disconnected</span>
     </div>
+    <div class="robot-state" id="robotState" data-state="IDLE">IDLE</div>
   </header>
 
-  <!-- Main Content -->
-  <main class="container">
+  <!-- Main Content Area -->
+  <main class="main-container">
     
-    <!-- Expressions -->
-    <section class="section">
-      <h2 class="section-title">Expressions</h2>
-      <div class="expression-grid" id="expressions">
-        <button class="expr-btn" data-behavior="neutral">😐<span>Neutral</span></button>
-        <button class="expr-btn" data-behavior="happy">😊<span>Happy</span></button>
-        <button class="expr-btn" data-behavior="sad">😢<span>Sad</span></button>
-        <button class="expr-btn" data-behavior="angry">😠<span>Angry</span></button>
-        <button class="expr-btn" data-behavior="surprised">😲<span>Surprised</span></button>
-        <button class="expr-btn" data-behavior="sleepy">😴<span>Sleepy</span></button>
-        <button class="expr-btn" data-behavior="love">😍<span>Love</span></button>
-        <button class="expr-btn" data-behavior="confused">🤔<span>Confused</span></button>
-        <button class="expr-btn" data-behavior="dizzy">😵<span>Dizzy</span></button>
-        <button class="expr-btn" data-behavior="wink">😉<span>Wink</span></button>
-        <button class="expr-btn" data-behavior="blink">😑<span>Blink</span></button>
-        <button class="expr-btn" data-behavior="look_left">👀<span>Look L</span></button>
-        <button class="expr-btn" data-behavior="look_right">👁️<span>Look R</span></button>
-        <button class="expr-btn" data-behavior="look_up">🔼<span>Look Up</span></button>
-        <button class="expr-btn" data-behavior="squint">🔻<span>Squint</span></button>
-        <button class="expr-btn" data-behavior="excited">🤩<span>Excited</span></button>
-      </div>
-    </section>
-
-    <!-- LED Colors -->
-    <section class="section">
-      <h2 class="section-title">LED Ring</h2>
-      <div class="color-row">
-        <button class="color-btn" style="background: #ff0000" data-color="255,0,0"></button>
-        <button class="color-btn" style="background: #ff8800" data-color="255,136,0"></button>
-        <button class="color-btn" style="background: #ffff00" data-color="255,255,0"></button>
-        <button class="color-btn" style="background: #00ff00" data-color="0,255,0"></button>
-        <button class="color-btn" style="background: #00ffff" data-color="0,255,255"></button>
-        <button class="color-btn" style="background: #0088ff" data-color="0,136,255"></button>
-        <button class="color-btn" style="background: #8800ff" data-color="136,0,255"></button>
-        <button class="color-btn" style="background: #ff00ff" data-color="255,0,255"></button>
-        <button class="color-btn" style="background: #ffffff" data-color="255,255,255"></button>
-        <button class="color-btn" style="background: #000000; border: 1px solid #333" data-color="0,0,0"></button>
-        <input type="color" class="color-custom" id="custom-color" value="#00d4ff">
-      </div>
-      <div class="effect-row">
-        <button class="effect-btn active" data-effect="solid">Solid</button>
-        <button class="effect-btn" data-effect="breathe">Breathe</button>
-        <button class="effect-btn" data-effect="rainbow">Rainbow</button>
-        <button class="effect-btn" data-effect="pulse">Pulse</button>
-        <button class="effect-btn" data-effect="off">Off</button>
-      </div>
-    </section>
-
-    <!-- Servo -->
-    <section class="section">
-      <h2 class="section-title">Head Movement</h2>
-      <div class="slider-container">
-        <div class="slider-label">
-          <span>Left</span>
-          <span id="servo-value">90°</span>
-          <span>Right</span>
+    <!-- Left: Robot Panel -->
+    <section class="robot-panel" aria-label="Robot Status">
+      <!-- Eye Animation Preview (OLED Simulator) -->
+      <div class="robot-display">
+        <div class="oled-preview" id="oledPreview">
+          <div class="eye" id="eyeLeft"></div>
+          <div class="eye" id="eyeRight"></div>
         </div>
-        <input type="range" class="slider" id="servo-slider" min="0" max="180" value="90">
+        <div class="robot-name-label">EMO</div>
+        <div class="behavior-label" id="currentBehavior">calm_idle</div>
       </div>
-    </section>
-
-    <!-- Quick Actions -->
-    <section class="section">
-      <h2 class="section-title">Quick Actions</h2>
+      
+      <!-- Quick Behavior Buttons -->
       <div class="quick-actions">
-        <button class="action-btn" id="btn-wake">👋 Wake Up</button>
-        <button class="action-btn" id="btn-dance">💃 Dance</button>
-        <button class="action-btn" id="btn-sleep">😴 Sleep</button>
-        <button class="action-btn danger" id="btn-reset">🔄 Reset</button>
+        <h4>Quick Expressions</h4>
+        <div class="action-grid">
+          <button class="action-btn" data-behavior="happy" title="Happy">😊</button>
+          <button class="action-btn" data-behavior="curious_idle" title="Curious">🤔</button>
+          <button class="action-btn" data-behavior="sleepy_idle" title="Sleepy">😴</button>
+          <button class="action-btn" data-behavior="shy_happy" title="Shy">😳</button>
+          <button class="action-btn" data-behavior="startled" title="Startled">😲</button>
+          <button class="action-btn" data-behavior="playful_mischief" title="Mischief">😈</button>
+        </div>
+      </div>
+
+      <!-- LED Color Control -->
+      <div class="led-control">
+        <h4>Mood Light</h4>
+        <div class="led-presets">
+          <button class="led-btn" data-color="#ff0000" style="background:#ff0000" title="Red"></button>
+          <button class="led-btn" data-color="#00ff00" style="background:#00ff00" title="Green"></button>
+          <button class="led-btn" data-color="#0000ff" style="background:#0000ff" title="Blue"></button>
+          <button class="led-btn" data-color="#ffff00" style="background:#ffff00" title="Yellow"></button>
+          <button class="led-btn" data-color="#ff00ff" style="background:#ff00ff" title="Purple"></button>
+          <button class="led-btn" data-color="#00ffff" style="background:#00ffff" title="Cyan"></button>
+          <button class="led-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+          <button class="led-btn led-off" data-color="off" title="Off">✕</button>
+        </div>
+      </div>
+      
+      <!-- Sensor Status -->
+      <div class="robot-info">
+        <h4>Sensors</h4>
+        <div class="info-item">
+          <span class="info-label">💡 Light</span>
+          <span class="info-value" id="sensorLight">—</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">👋 Motion</span>
+          <span class="info-value" id="sensorMotion">—</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">📏 Distance</span>
+          <span class="info-value" id="sensorDistance">—</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">✋ Touch</span>
+          <span class="info-value" id="sensorTouch">—</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">🎤 Sound</span>
+          <span class="info-value" id="sensorSound">—</span>
+        </div>
       </div>
     </section>
 
-    <!-- Sensors -->
-    <section class="section">
-      <h2 class="section-title">Sensors</h2>
-      <div class="sensor-grid">
-        <div class="sensor-item">
-          <div class="icon">👋</div>
-          <div class="value" id="sensor-pir">--</div>
-          <div class="label">Motion</div>
+    <!-- Right: Chat Panel -->
+    <section class="chat-panel" aria-label="Conversation">
+      <div class="chat-header">
+        <h2>💬 Chat with EMO</h2>
+        <div class="chat-actions">
+          <button id="servoLeft" class="servo-btn" title="Look Left">⬅️</button>
+          <button id="servoCenter" class="servo-btn" title="Center">⏺️</button>
+          <button id="servoRight" class="servo-btn" title="Look Right">➡️</button>
         </div>
-        <div class="sensor-item">
-          <div class="icon">☀️</div>
-          <div class="value" id="sensor-ldr">--</div>
-          <div class="label">Light</div>
-        </div>
-        <div class="sensor-item">
-          <div class="icon">📏</div>
-          <div class="value" id="sensor-dist">--</div>
-          <div class="label">Distance</div>
-        </div>
-        <div class="sensor-item">
-          <div class="icon">👆</div>
-          <div class="value" id="sensor-touch1">--</div>
-          <div class="label">Touch 1</div>
-        </div>
-        <div class="sensor-item">
-          <div class="icon">👆</div>
-          <div class="value" id="sensor-touch2">--</div>
-          <div class="label">Touch 2</div>
-        </div>
-        <div class="sensor-item">
-          <div class="icon">⏱️</div>
-          <div class="value" id="sensor-uptime">--</div>
-          <div class="label">Uptime</div>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <!-- Messages will be added dynamically by JavaScript -->
+        <div class="message robot">
+          <div class="message-content">வணக்கம்! I'm EMO, your desk companion 😊</div>
+          <div class="message-time">Just now</div>
         </div>
       </div>
     </section>
 
   </main>
 
-  <!-- Toast -->
-  <div class="toast" id="toast"></div>
+  <!-- Bottom Input Bar -->
+  <footer class="input-bar">
+    <button id="micButton" class="mic-button" title="Hold to speak (mobile only)">
+      <span class="mic-icon">🎤</span>
+      <span class="mic-status"></span>
+    </button>
+    <input 
+      type="text" 
+      id="messageInput" 
+      class="message-input"
+      placeholder="Say something to EMO..." 
+      disabled
+      autocomplete="off"
+      maxlength="500"
+    >
+    <button id="sendButton" class="send-button" disabled>
+      <span>Send</span>
+    </button>
+  </footer>
 
-  <script>
-    // ========================================================================
-    // CONFIGURATION
-    // ========================================================================
-    
-    const AUTH_TOKEN = 'emo_secret_2024';
-    const WS_URL = `ws://${window.location.host}/ws?type=controller&token=${AUTH_TOKEN}`;
-    
-    // ========================================================================
-    // ELEMENTS
-    // ========================================================================
-    
-    const overlay = document.getElementById('overlay');
-    const overlayMsg = document.getElementById('overlay-msg');
-    const retryBtn = document.getElementById('retry-btn');
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-    const toast = document.getElementById('toast');
-    
-    // ========================================================================
-    // WEBSOCKET
-    // ========================================================================
-    
-    let ws = null;
-    let reconnectTimeout = null;
-    let robotConnected = false;
-    
-    function connect() {
-      overlay.classList.remove('hidden');
-      overlayMsg.textContent = 'Connecting to server...';
-      retryBtn.style.display = 'none';
-      
-      ws = new WebSocket(WS_URL);
-      
-      ws.onopen = () => {
-        console.log('[WS] Connected');
-        overlay.classList.add('hidden');
-        showToast('Connected to server');
-      };
-      
-      ws.onclose = () => {
-        console.log('[WS] Disconnected');
-        setRobotStatus(false);
-        overlay.classList.remove('hidden');
-        overlayMsg.textContent = 'Connection lost';
-        retryBtn.style.display = 'block';
-        
-        // Auto-reconnect after 3 seconds
-        reconnectTimeout = setTimeout(connect, 3000);
-      };
-      
-      ws.onerror = (err) => {
-        console.error('[WS] Error:', err);
-        overlay.classList.remove('hidden');
-        overlayMsg.textContent = 'Connection error';
-        retryBtn.style.display = 'block';
-      };
-      
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          handleMessage(msg);
-        } catch (err) {
-          console.error('[WS] Parse error:', err);
-        }
-      };
-    }
-    
-    function send(data) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(data));
-        return true;
-      }
-      showToast('Not connected');
-      return false;
-    }
-    
-    // ========================================================================
-    // MESSAGE HANDLER
-    // ========================================================================
-    
-    function handleMessage(msg) {
-      console.log('[WS] Received:', msg.type);
-      
-      switch (msg.type) {
-        case 'init':
-          setRobotStatus(msg.robotConnected);
-          if (msg.state) updateState(msg.state);
-          break;
-          
-        case 'robot_status':
-          setRobotStatus(msg.connected);
-          showToast(msg.connected ? '🤖 Robot connected!' : '⚠️ Robot disconnected');
-          break;
-          
-        case 'state':
-          updateState(msg.state);
-          break;
-          
-        case 'sensor':
-          updateSensors(msg.sensors);
-          break;
-          
-        case 'behavior_changed':
-          setActiveBehavior(msg.name);
-          break;
-          
-        case 'event':
-          handleEvent(msg.event, msg.data);
-          break;
-          
-        case 'pong':
-          break;
-      }
-    }
-    
-    function setRobotStatus(connected) {
-      robotConnected = connected;
-      statusDot.classList.toggle('connected', connected);
-      statusText.textContent = connected ? 'Online' : 'Offline';
-    }
-    
-    function updateState(state) {
-      if (state.currentBehavior) setActiveBehavior(state.currentBehavior);
-      if (state.servoAngle !== undefined) {
-        document.getElementById('servo-slider').value = state.servoAngle;
-        document.getElementById('servo-value').textContent = state.servoAngle + '°';
-      }
-      if (state.sensors) updateSensors(state.sensors);
-    }
-    
-    function updateSensors(sensors) {
-      if (sensors.pir !== undefined) {
-        document.getElementById('sensor-pir').textContent = sensors.pir ? 'Yes' : 'No';
-      }
-      if (sensors.ldr !== undefined) {
-        document.getElementById('sensor-ldr').textContent = sensors.ldr + '%';
-      }
-      if (sensors.distance !== undefined) {
-        document.getElementById('sensor-dist').textContent = sensors.distance + 'cm';
-      }
-      if (sensors.touch1 !== undefined) {
-        document.getElementById('sensor-touch1').textContent = sensors.touch1 ? 'Yes' : 'No';
-      }
-      if (sensors.touch2 !== undefined) {
-        document.getElementById('sensor-touch2').textContent = sensors.touch2 ? 'Yes' : 'No';
-      }
-    }
-    
-    function handleEvent(event, data) {
-      switch (event) {
-        case 'motion':
-          showToast('👋 Motion detected!');
-          break;
-        case 'touch':
-          showToast('👆 Touched!');
-          break;
-        case 'obstacle':
-          showToast('⚠️ Obstacle detected!');
-          break;
-      }
-    }
-    
-    function setActiveBehavior(name) {
-      document.querySelectorAll('.expr-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.behavior === name);
-      });
-    }
-    
-    // ========================================================================
-    // UI HANDLERS
-    // ========================================================================
-    
-    // Expression buttons
-    document.getElementById('expressions').addEventListener('click', (e) => {
-      const btn = e.target.closest('.expr-btn');
-      if (btn) {
-        const behavior = btn.dataset.behavior;
-        send({ type: 'behavior', name: behavior });
-        setActiveBehavior(behavior);
-      }
-    });
-    
-    // Color buttons
-    document.querySelectorAll('.color-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const [r, g, b] = btn.dataset.color.split(',').map(Number);
-        send({ type: 'led', r, g, b });
-        document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      });
-    });
-    
-    // Custom color
-    document.getElementById('custom-color').addEventListener('input', (e) => {
-      const hex = e.target.value;
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      send({ type: 'led', r, g, b });
-    });
-    
-    // Effect buttons
-    document.querySelectorAll('.effect-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const effect = btn.dataset.effect;
-        if (effect === 'off') {
-          send({ type: 'led', r: 0, g: 0, b: 0 });
-        } else {
-          send({ type: 'led', effect });
-        }
-        document.querySelectorAll('.effect-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      });
-    });
-    
-    // Servo slider
-    let servoTimeout = null;
-    document.getElementById('servo-slider').addEventListener('input', (e) => {
-      const angle = parseInt(e.target.value);
-      document.getElementById('servo-value').textContent = angle + '°';
-      
-      // Debounce
-      clearTimeout(servoTimeout);
-      servoTimeout = setTimeout(() => {
-        send({ type: 'servo', angle });
-      }, 50);
-    });
-    
-    // Quick actions
-    document.getElementById('btn-wake').addEventListener('click', () => {
-      send({ type: 'behavior', name: 'happy' });
-      send({ type: 'led', r: 255, g: 200, b: 0 });
-    });
-    
-    document.getElementById('btn-dance').addEventListener('click', () => {
-      send({ type: 'behavior', name: 'excited' });
-      send({ type: 'led', effect: 'rainbow' });
-    });
-    
-    document.getElementById('btn-sleep').addEventListener('click', () => {
-      send({ type: 'behavior', name: 'sleepy' });
-      send({ type: 'led', r: 0, g: 0, b: 30 });
-    });
-    
-    document.getElementById('btn-reset').addEventListener('click', () => {
-      send({ type: 'behavior', name: 'neutral' });
-      send({ type: 'servo', angle: 90 });
-      send({ type: 'led', r: 0, g: 0, b: 0 });
-      setActiveBehavior('neutral');
-    });
-    
-    // Retry button
-    retryBtn.addEventListener('click', () => {
-      clearTimeout(reconnectTimeout);
-      connect();
-    });
-    
-    // ========================================================================
-    // TOAST
-    // ========================================================================
-    
-    let toastTimeout = null;
-    function showToast(message) {
-      toast.textContent = message;
-      toast.classList.add('show');
-      clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => {
-        toast.classList.remove('show');
-      }, 2500);
-    }
-    
-    // ========================================================================
-    // HEARTBEAT
-    // ========================================================================
-    
-    setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        send({ type: 'ping' });
-      }
-    }, 25000);
-    
-    // ========================================================================
-    // START
-    // ========================================================================
-    
-    connect();
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>

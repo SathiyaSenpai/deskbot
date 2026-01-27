@@ -1,0 +1,205 @@
+// ================================================
+// ROBOT CONTROLLER - PASSIVE MIRROR MODE
+// ================================================
+
+const CONFIG = {
+  WS_URL: `ws://${window.location.host}/ws?type=controller`,
+};
+
+const state = {
+  ws: null,
+  isConnected: false
+};
+
+const elements = {
+  status: document.getElementById('connectionStatus'),
+  robotState: document.getElementById('robotState'),
+  eyeLeft: document.getElementById('eyeLeft'),
+  eyeRight: document.getElementById('eyeRight'),
+  sensorDist: document.getElementById('sensorDistance'),
+  sensorTouch: document.getElementById('sensorTouch'),
+  chat: document.getElementById('chatMessages'),
+  input: document.getElementById('messageInput'),
+  sendBtn: document.getElementById('sendButton')
+};
+
+// 1. ANIMATION PHYSICS (Matches behaviors.h)
+const BEHAVIORS = {
+  'calm_idle':   { openness: 1.0, scaleX: 1.0, top: 0.0, bot: 0.0, x: 0, y: 0 },
+  'happy':       { openness: 1.1, scaleX: 1.1, top: 0.0, bot: 0.6, x: 0, y: -2 },
+  'sad':         { openness: 0.7, scaleX: 0.9, top: 0.4, bot: 0.1, x: 0, y: 5 },
+  'angry':       { openness: 0.9, scaleX: 0.9, top: 0.5, bot: -0.1, x: 0, y: 0 },
+  'surprised':   { openness: 1.2, scaleX: 0.85, top: 0.0, bot: 0.0, x: 0, y: -2 },
+  'look_left':   { openness: 1.0, scaleX: 1.0, top: 0.0, bot: 0.0, x: -12, y: 0 },
+  'look_right':  { openness: 1.0, scaleX: 1.0, top: 0.0, bot: 0.0, x: 12, y: 0 },
+  'confused':    { openness: 1.0, scaleX: 1.0, top: 0.1, bot: 0.0, x: 5, y: -2 }
+};
+
+let currentAnim = { openness: 1.0, scaleX: 1.0, x: 0, y: 0, top: 0, bot: 0 };
+let targetAnim = { ...BEHAVIORS['calm_idle'] };
+
+function renderLoop() {
+  const f = 0.2; // Fast interpolation
+  currentAnim.openness += (targetAnim.openness - currentAnim.openness) * f;
+  currentAnim.scaleX += (targetAnim.scaleX - currentAnim.scaleX) * f;
+  currentAnim.x += (targetAnim.x - currentAnim.x) * f;
+  currentAnim.y += (targetAnim.y - currentAnim.y) * f;
+  currentAnim.top += (targetAnim.top - currentAnim.top) * f;
+  currentAnim.bot += (targetAnim.bot - currentAnim.bot) * f;
+
+  const transform = `translate(${currentAnim.x}px, ${currentAnim.y}px) scale(${currentAnim.scaleX}, ${currentAnim.openness})`;
+  const topH = Math.max(0, currentAnim.top * 100);
+  const botH = Math.max(0, currentAnim.bot * 100);
+  const clip = `polygon(0 ${topH}%, 100% ${topH}%, 100% ${100-botH}%, 0 ${100-botH}%)`;
+
+  if(elements.eyeLeft) {
+      elements.eyeLeft.style.transform = transform;
+      elements.eyeLeft.style.clipPath = clip;
+  }
+  if(elements.eyeRight) {
+      elements.eyeRight.style.transform = transform;
+      elements.eyeRight.style.clipPath = clip;
+  }
+  requestAnimationFrame(renderLoop);
+}
+
+// 2. NETWORK
+function connect() {
+  state.ws = new WebSocket(CONFIG.WS_URL);
+  
+  state.ws.onopen = () => {
+    state.isConnected = true;
+    updateStatus('Connected', 'green');
+    if (elements.input) elements.input.disabled = false;
+    if (elements.sendBtn) elements.sendBtn.disabled = false;
+  };
+
+  state.ws.onmessage = (evt) => {
+    const msg = JSON.parse(evt.data);
+    
+    // A. SYNC ANIMATION (Robot -> Server -> Here)
+if (msg.type === 'robot_status' && msg.event === 'sync_behavior') {
+        const name = msg.detail;
+        console.log("Sync:", name);
+        if (BEHAVIORS[name]) {
+            targetAnim = BEHAVIORS[name];
+            const behaviorLabel = document.getElementById('currentBehavior');
+            if (behaviorLabel) behaviorLabel.innerText = name;
+        }
+    }
+    // A2. SYNC FROM BUTTONS
+    else if (msg.type === 'set_behavior') {
+        if (BEHAVIORS[msg.name]) {
+            targetAnim = BEHAVIORS[msg.name];
+            const behaviorLabel = document.getElementById('currentBehavior');
+            if (behaviorLabel) behaviorLabel.innerText = msg.name;
+        }
+    }
+    
+    // B. SENSOR DATA
+    else if (msg.type === 'sensor_data') {
+        if (elements.sensorDist) elements.sensorDist.innerText = msg.distance_mm + 'mm';
+        if (elements.sensorTouch) elements.sensorTouch.innerText = msg.touch_head ? 'Yes' : 'No';
+        
+        // FIXED: Add missing sensor displays
+        const sensorLight = document.getElementById('sensorLight');
+        const sensorMotion = document.getElementById('sensorMotion');
+        const sensorSound = document.getElementById('sensorSound');
+        
+        if (sensorLight) sensorLight.innerText = msg.light || '—';
+        if (sensorMotion) sensorMotion.innerText = msg.motion ? 'Yes' : 'No';
+        if (sensorSound) sensorSound.innerText = msg.soundLevel + '%' || '—';
+    }
+    
+    // C. CHAT
+    else if (msg.type === 'chat_response') {
+        const div = document.createElement('div');
+        div.className = 'message robot';
+        div.innerHTML = `<div class="message-content">${msg.text}</div>`;
+        elements.chat.appendChild(div);
+        elements.chat.scrollTop = elements.chat.scrollHeight;
+    }
+  };
+
+  state.ws.onclose = () => {
+    state.isConnected = false;
+    updateStatus('Disconnected', 'red');
+
+    if (elements.input) elements.input.disabled = true;
+    if (elements.sendBtn) elements.sendBtn.disabled = true;
+    setTimeout(connect, 3000);
+  };
+}
+
+// 3. COMMANDS
+window.triggerBehavior = (name) => {
+    if(state.ws) state.ws.send(JSON.stringify({ type: 'set_behavior', name: name }));
+};
+
+function sendChat() {
+    const text = elements.input.value;
+    if (!text) return;
+    
+    // Add user message
+    const div = document.createElement('div');
+    div.className = 'message user';
+    div.innerHTML = `<div class="message-content">${text}</div>`;
+    elements.chat.appendChild(div);
+    elements.chat.scrollTop = elements.chat.scrollHeight;
+    
+    if(state.ws) state.ws.send(JSON.stringify({ type: 'chat_message', text: text }));
+    elements.input.value = '';
+}
+
+window.controlServo = (angle) => {
+    if (state.ws && state.isConnected) {
+        state.ws.send(JSON.stringify({ type: 'servo_action', angle: angle }));
+    }
+};
+
+window.setLED = (color) => {
+    if (state.ws && state.isConnected) {
+        state.ws.send(JSON.stringify({ type: 'led_action', color: color }));
+        
+        // Update active state in UI
+        document.querySelectorAll('.led-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+    }
+};
+
+// Initialize servo buttons
+document.addEventListener('DOMContentLoaded', () => {
+    renderLoop();
+    connect();
+    elements.sendBtn.onclick = sendChat;
+    elements.input.onkeypress = (e) => e.key === 'Enter' && sendChat();
+    
+    const servoLeft = document.getElementById('servoLeft');
+    const servoCenter = document.getElementById('servoCenter');
+    const servoRight = document.getElementById('servoRight');
+    
+    if (servoLeft) servoLeft.onclick = () => controlServo(45);
+    if (servoCenter) servoCenter.onclick = () => controlServo(90);
+    if (servoRight) servoRight.onclick = () => controlServo(135);
+
+    document.querySelectorAll('.led-btn').forEach(btn => {
+    btn.onclick = (e) => {
+    const color = btn.getAttribute('data-color'); 
+    setLED(color);
+      };
+    });
+
+    document.querySelectorAll('.action-btn').forEach(btn => {
+        btn.onclick = () => {
+            const behavior = btn.getAttribute('data-behavior');
+            triggerBehavior(behavior);
+            };
+    });
+});
+
+function updateStatus(text, color) {
+    if(elements.status) {
+        elements.status.innerText = text;
+        elements.status.style.color = color;
+    }
+}

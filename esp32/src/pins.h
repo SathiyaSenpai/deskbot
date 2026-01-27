@@ -16,8 +16,8 @@
 
 // I2S Microphone Input
 #define PIN_I2S_MIC_SCK     14
-#define PIN_I2S_MIC_WS      15  // Shares touch channel T3, keep mic priority
-#define PIN_I2S_MIC_SD      32
+#define PIN_I2S_MIC_WS      12  // Shares touch channel T3, keep mic priority
+#define PIN_I2S_MIC_SD      35
 
 // WS2812 RGB LED Ring
 #define PIN_NEOPIXEL        13
@@ -26,8 +26,8 @@
 // Sensors
 #define PIN_PIR             33
 #define PIN_LDR             34      // ADC input
-#define PIN_ULTRASONIC_TRIG 12
-#define PIN_ULTRASONIC_ECHO 35
+#define PIN_ULTRASONIC_TRIG 23
+#define PIN_ULTRASONIC_ECHO 5
 
 // Actuators
 #define PIN_SERVO           18
@@ -35,7 +35,7 @@
 
 // Touch sensors (capacitive)
 #define PIN_TOUCH_HEAD      4   // T0 - Primary touch (head)
-#define PIN_TOUCH_SIDE      2   // T2 - Secondary touch (side)
+#define PIN_TOUCH_SIDE      15   // T2 - Secondary touch (side)
 #define TOUCH_THRESHOLD     40  // Lower = more sensitive
 
 #endif // PINS_H

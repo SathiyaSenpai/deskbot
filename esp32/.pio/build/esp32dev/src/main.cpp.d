@@ -193,6 +193,8 @@
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiUdp.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/Udp.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/cbuf.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
  .pio/libdeps/esp32dev/U8g2/src/U8g2lib.h \
  .pio/libdeps/esp32dev/U8g2/src/U8x8lib.h \
  .pio/libdeps/esp32dev/U8g2/src/clib/u8x8.h \
@@ -202,23 +204,6 @@
  .pio/libdeps/esp32dev/ArduinoJson/src/ArduinoJson.hpp \
  .pio/libdeps/esp32dev/ArduinoJson/src/ArduinoJson/Configuration.hpp \
  src/config.h src/pins.h src/behaviors.h src/eye_engine.h src/sensors.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/i2s.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/include/soc/i2s_periph.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/periph_defs.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/i2s_struct.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/i2s_reg.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/include/soc/rtc_periph.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/include/soc/rtc_io_periph.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_io_channel.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_io_reg.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_io_struct.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_cntl_reg.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_cntl_struct.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/sens_struct.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/hal/include/hal/i2s_types.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/periph_ctrl.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/adc.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/hal/include/hal/adc_types.h \
  src/led_controller.h \
  .pio/libdeps/esp32dev/Adafruit\ NeoPixel/Adafruit_NeoPixel.h \
  src/servo_controller.h .pio/libdeps/esp32dev/ESP32Servo/src/ESP32Servo.h \
@@ -267,10 +252,38 @@
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/mbedtls/port/include/aes/esp_aes.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/hal/include/hal/aes_types.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/mbedtls/mbedtls/include/mbedtls/error.h \
- src/audio_manager.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/HTTPClient/src/HTTPClient.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiClient.h \
- src/wifi_manager.h \
+ src/audio_manager.h .pio/libdeps/esp32dev/ESP32-audioI2S/src/Audio.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/libb64/cencode.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-log.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/i2s.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/include/soc/i2s_periph.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/periph_defs.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/i2s_struct.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/i2s_reg.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/include/soc/rtc_periph.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/include/soc/rtc_io_periph.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_io_channel.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_io_reg.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_io_struct.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_cntl_reg.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/rtc_cntl_struct.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/sens_struct.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/hal/include/hal/i2s_types.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/periph_ctrl.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/adc.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/hal/include/hal/adc_types.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/SPI/src/SPI.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-spi.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/SD/src/SD.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/FS/src/FS.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/SD/src/sd_defines.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src/SD_MMC.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/driver/include/driver/sdmmc_types.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src/sd_defines.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/SPIFFS/src/SPIFFS.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/FFat/src/FFat.h \
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/wear_levelling/include/wear_levelling.h \
+ src/mic_manager.h src/wifi_manager.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/WebServer.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/HTTP_Method.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/nghttp/port/include/http_parser.h \

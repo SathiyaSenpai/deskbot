@@ -1,7 +1,3 @@
-/**
- * AI DESKBOT SERVER - ES MODULE FIX
- */
-
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import http from 'http';
@@ -39,7 +35,7 @@ function getServerIP() {
 }
 
 const SERVER_IP = getServerIP();
-console.log(`📡 Server IP: ${SERVER_IP}:${PORT}`);
+console.log(`ðŸ“¡ Server IP: ${SERVER_IP}:${PORT}`);
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
@@ -47,8 +43,8 @@ app.use(express.json());
 let robotWs = null;
 let controllers = new Set(); 
 
-console.log(`\n🤖 SERVER READY: Connect PC to Hotspot`);
-console.log(`📡 IP MUST BE IN CONFIG.H: Check 'ipconfig' or use: ${SERVER_IP}\n`);
+console.log(`\nðŸ¤– SERVER READY: Connect PC to Hotspot`);
+console.log(`ðŸ“¡ IP MUST BE IN CONFIG.H: Check 'ipconfig' or use: ${SERVER_IP}\n`);
 
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
@@ -57,13 +53,13 @@ wss.on('connection', (ws, req) => {
     // 1. REGISTER ROBOT
     if (type === 'robot') {
         robotWs = ws;
-        console.log(`✅ ROBOT CONNECTED!`);
+        console.log(`âœ… ROBOT CONNECTED!`);
         broadcast({ type: 'robot_status', state: 'ONLINE' });
     } 
     // 2. REGISTER WEB APP
     else {
         controllers.add(ws);
-        console.log(`💻 WEB APP CONNECTED`);
+        console.log(`ðŸ’» WEB APP CONNECTED`);
         ws.send(JSON.stringify({ 
             type: 'robot_status', 
             state: robotWs ? 'ONLINE' : 'OFFLINE' 
@@ -80,7 +76,7 @@ wss.on('connection', (ws, req) => {
 
                 // AI Logic
                 if (msg.event === 'proximity') {
-                    console.log(`👀 Proximity! Generating Speech...`);
+                    console.log(`ðŸ‘€ Proximity! Generating Speech...`);
                     const text = await chat("Greeting: My owner is here.");
                     const audio = await textToSpeech(text);
                     if (audio.audioFile) {
@@ -95,7 +91,7 @@ wss.on('connection', (ws, req) => {
             
             // B. FROM WEB -> ROBOT (Control)
             else {
-                console.log(`📱 Web Command: ${msg.type}`);
+                console.log(`ðŸ“± Web Command: ${msg.type}`);
                 
                 // Handle state request
                 if (msg.type === 'request_state') {
@@ -111,7 +107,7 @@ wss.on('connection', (ws, req) => {
                 }
                 // Handle Chat
                 else if (msg.type === 'chat_message') {
-                    console.log(`💬 User: ${msg.text}`);
+                    console.log(`ðŸ’¬ User: ${msg.text}`);
                     const reply = await chat(msg.text);
                     const audio = await textToSpeech(reply);
                     
@@ -143,7 +139,7 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', () => {
         if (ws === robotWs) {
-            console.log(`❌ ROBOT DISCONNECTED`);
+            console.log(`âŒ ROBOT DISCONNECTED`);
             robotWs = null;
             broadcast({ type: 'robot_status', state: 'OFFLINE' });
         } else {
@@ -159,4 +155,4 @@ function broadcast(data) {
     }
 }
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Listening on Port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`ðŸš€ Listening on Port ${PORT}`));

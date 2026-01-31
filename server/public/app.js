@@ -1,7 +1,3 @@
-// ================================================
-// ENHANCED ROBOT CONTROLLER - FULL BEHAVIOR SYNC
-// ================================================
-
 const CONFIG = {
   WS_URL: `ws://${window.location.host}/ws?type=controller`,
 };
@@ -211,7 +207,7 @@ function renderEffects() {
       
     case 'sparkle':
       if (Math.floor(effectTimer * 5) % 3 === 0) {
-        container.innerHTML = '<div style="position:absolute;right:0;top:-5px;color:#fff;font-size:8px;">✨</div>';
+        container.innerHTML = '<div style="position:absolute;right:0;top:-5px;color:#fff;font-size:8px;">âœ¨</div>';
       }
       break;
       
@@ -334,7 +330,7 @@ function updateSensors(data) {
   const sensorMotion = document.getElementById('sensorMotion');
   const sensorSound = document.getElementById('sensorSound');
   
-  if (sensorLight) sensorLight.innerText = data.light || '—';
+  if (sensorLight) sensorLight.innerText = data.light || 'â€”';
   if (sensorMotion) sensorMotion.innerText = data.motion ? 'Yes' : 'No';
   if (sensorSound) sensorSound.innerText = (data.soundLevel || 0) + '%';
 }

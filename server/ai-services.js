@@ -55,12 +55,12 @@ export const AI_CONFIG = {
     ollamaUrl: 'http://localhost:11434',
     
     // Gemini settings (FREE - 15 req/min)
-    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyBhitK6oZowfofwyMfuU5qddAFZZQ5_VOM',
     geminiModel: 'gemini-1.5-flash',
   },
   
   // Robot personality prompt
-  systemPrompt: `You are EMO, a cute and friendly desk robot companion. 
+  systemPrompt: `You are a companion, a cute and friendly desk robot companion. 
 You speak in a mix of Tamil and English (Tanglish).
 Keep responses SHORT (1-2 sentences).
 Be playful, curious, and supportive.
@@ -262,20 +262,6 @@ async function piperTTS(text, outputPath) {
   });
 }
 
-// ============================================================================
-// LLM - Gemini API (Free Tier) or Ollama (Local)
-// ============================================================================
-
-/*
-GEMINI SETUP (Recommended for low-RAM systems):
-1. Go to: https://aistudio.google.com/app/apikey
-2. Create API key (FREE!)
-3. Set environment variable: export GEMINI_API_KEY=your_key_here
-
-OLLAMA SETUP (For systems with 8GB+ RAM):
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull tinyllama  # Small model (1.1GB)
-*/
 
 // Conversation history for context
 const conversationHistory = [];
@@ -387,13 +373,13 @@ function getFallbackResponse(userMessage) {
   };
   
   if (responses.greetings.some(g => msg.includes(g))) {
-    return ['Vanakkam! 😊 Eppadi irukeenga?', 'Hello! Naan EMO, ungaluku enna help?', 'Hey! Nice to see you! 🤖'][Math.floor(Math.random() * 3)];
+    return ['Vanakkam! 😊 Eppadi irukeenga?', 'Hello! Naan unga companion, ungaluku enna help?', 'Hey! Nice to see you! 🤖'][Math.floor(Math.random() * 3)];
   }
   if (responses.howAreYou.some(g => msg.includes(g))) {
     return ['Naan super ah irukken! 😄 Neenga?', 'Happy ah irukken! What about you?', 'Romba nalla irukken! 🎉'][Math.floor(Math.random() * 3)];
   }
   if (responses.name.some(g => msg.includes(g))) {
-    return "Naan EMO! Your friendly desk robot companion 🤖";
+    return "Naan unga friendly desk robot companion 🤖";
   }
   if (responses.thanks.some(g => msg.includes(g))) {
     return ['Paravala! 😊', 'Welcome! Happy to help!', 'Anytime! 🤗'][Math.floor(Math.random() * 3)];

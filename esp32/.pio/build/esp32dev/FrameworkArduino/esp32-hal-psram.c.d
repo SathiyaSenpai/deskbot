@@ -101,6 +101,4 @@
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-bt.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-psram.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-rgb-led.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-cpu.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/soc/esp32/include/soc/efuse_reg.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-cpu.h

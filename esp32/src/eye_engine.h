@@ -98,8 +98,8 @@ public:
     else if (strcmp(b->name, "sleeping") == 0) {
       targetWidth_ = 28;
       targetHeight_ = 6;
-      targetTopLid_ = 0.85f;
-      targetBottomLid_ = 0.85f;
+      targetTopLid_ = 0.45f;
+      targetBottomLid_ = 0.45f;
       activeEffect_ = EFFECT_ZZZ;
       Serial.printf("[EYE] SLEEPING: Almost closed\n");
     }
@@ -351,87 +351,136 @@ private:
     }
   }
 
+    // FIXED: Reduced ZZZ effect size
+  const float ZZZ_EFFECT_SCALE = 0.5f; // Reduced from 0.8 to 0.5
+  const float EFFECT_STARS_SCALE = 0.5f; // Reduced from 1.0 to 0.7
+
   void renderEffect(int cx, int cy) {
     display_.setDrawColor(1);
+    display_.setFont(u8g2_font_6x10_tr); // Small font for ZZZ
 
     switch (activeEffect_) {
       case EFFECT_ZZZ: {
-        display_.setFont(u8g2_font_ncenB08_tr);  // Use guaranteed font
+        // FIXED: Start Y at 10 (Above the eye) instead of 40 (Center of eye)
+        // calculated as: StartY - (Time * Speed)
         
+        // Z1
         float t1 = fmod(effectTimer_, 3.0f);
-        float y1 = 25.0f - (t1 * 8.0f);
-        if (y1 > 0 && y1 < 50) {
-          display_.drawStr(cx + 10, (int)y1, "z");
-        }
+        float y1 = 20.0f - (t1 * 8.0f);   // Float up from 19 to 11
+        if (y1 > -5) display_.drawStr(cx + 8, (int)y1, "z");
 
+        // Z2 (Offset 1s)
         float t2 = fmod(effectTimer_ + 1.0f, 3.0f);
-        float y2 = 25.0f - (t2 * 8.0f);
-        if (y2 > 0 && y2 < 50) {
-          display_.drawStr(cx + 18, (int)y2, "Z");
-        }
+        float y2 = 20.0f - (t2 * 8.0f);
+        if (y2 > -5) display_.drawStr(cx + 16, (int)y2, "Z");
 
+        // Z3 (Offset 2s)
         float t3 = fmod(effectTimer_ + 2.0f, 3.0f);
-        float y3 = 25.0f - (t3 * 8.0f);
-        if (y3 > 0 && y3 < 50) {
-          display_.drawStr(cx + 26, (int)y3, "z");
-        }
+        float y3 = 20.0f - (t3 * 8.0f);
+        if (y3 > -5) display_.drawStr(cx + 24, (int)y3, "z");
         break;
       }
       
       case EFFECT_HEART: {
-        display_.setFont(u8g2_font_ncenB08_tr);
-        // Slower, more visible heart
-        int heartY = 50 - (int)(fmod(effectTimer_ * 8.0f, 40.0f));
-        if (heartY > 10 && heartY < 55) {
-          display_.drawStr(cx + 18, heartY, "<3");
+        // BIG hearts floating up
+        if ((int)(effectTimer_ * 2) % 3 == 0) {
+          int heartY = 20 - (int)(effectTimer_ * 15) % 30;
+          if (heartY > 10 && heartY < 55) {
+            int hx = cx + 22;
+            display_.drawBox(hx, heartY, 2, 2);
+            display_.drawBox(hx + 4, heartY, 2, 2);
+            display_.drawBox(hx - 1, heartY + 2, 8, 3);
+            display_.drawBox(hx + 1, heartY + 5, 4, 2);
+            display_.drawBox(hx + 2, heartY + 7, 2, 2);
+          }
         }
         break;
       }
       
       case EFFECT_STARS: {
-        // Persistent stars (not animated, just there)
-        display_.setFont(u8g2_font_ncenB08_tr);
-        display_.drawStr(cx + 12, cy - 8, "*");
-        display_.drawStr(cx + 22, cy + 8, "*");
-        display_.drawStr(cx + 18, cy + 18, "*");
+        // Switch to bigger font for stars
+        display_.setFont(u8g2_font_9x15_tr);
+        
+        if (effectTimer_ < 1.0f) {
+          int spread = (int)(effectTimer_ * 15);
+          
+          int sx = cx + 12 + spread;
+          int sy = cy - 10 - spread/2;
+          if (sx >= 0 && sx < 125 && sy >= 0 && sy < 60) {
+            display_.drawStr(sx, sy, "*");
+          }
+          
+          sx = cx + 12 + spread;
+          sy = cy + 10 + spread/2;
+          if (sx >= 0 && sx < 125 && sy >= 0 && sy < 60) {
+            display_.drawStr(sx, sy, "*");
+          }
+          
+          display_.drawStr(cx + 18, cy, "*");
+        }
         break;
       }
       
       case EFFECT_SPARKLE: {
-        // Blinking sparkles
-        if ((int)(effectTimer_ * 4) % 2 == 0) {
-          display_.drawDisc(cx + 18, cy - 10, 2);
-          display_.drawDisc(cx + 25, cy - 5, 2);
-          display_.drawDisc(cx + 20, cy + 10, 2);
+        
+        // Sparkle 1 (Top Right) - Position: X+22, Y-12
+        float t1 = fmod(effectTimer_ * 3.0f, 1.0f); // 3Hz Speed
+        if (t1 < 0.6f) { 
+           // Curve goes 0 -> 1 -> 0
+           float intensity = sin(t1 * 3.14159f / 0.6f); 
+           int r = (int)(intensity * 4.0f); // Max Radius = 4
+           if (r > 0) {
+             int sx = cx + 22; int sy = cy - 12; 
+             display_.drawLine(sx - r, sy, sx + r, sy); // Horizontal Line
+             display_.drawLine(sx, sy - r, sx, sy + r); // Vertical Line
+           }
+        }
+
+        // Sparkle 2 (Far Right) - Position: X+30, Y-2
+        float t2 = fmod(effectTimer_ * 2.0f + 0.3f, 1.0f); // Offset timing
+        if (t2 < 0.6f) {
+           float intensity = sin(t2 * 3.14159f / 0.6f);
+           int r = (int)(intensity * 5.0f); // Max Radius = 5 (Big one)
+           if (r > 0) {
+             int sx = cx + 30; int sy = cy - 2;
+             display_.drawLine(sx - r, sy, sx + r, sy);
+             display_.drawLine(sx, sy - r, sx, sy + r);
+           }
+        }
+
+        // Sparkle 3 (Bottom Right) - Position: X+24, Y+10
+        float t3 = fmod(effectTimer_ * 2.5f + 0.7f, 1.0f);
+        if (t3 < 0.6f) {
+           float intensity = sin(t3 * 3.14159f / 0.6f);
+           int r = (int)(intensity * 3.0f); // Max Radius = 3 (Small one)
+           if (r > 0) {
+             int sx = cx + 24; int sy = cy + 10;
+             display_.drawLine(sx - r, sy, sx + r, sy);
+             display_.drawLine(sx, sy - r, sx, sy + r);
+           }
         }
         break;
       }
 
       case EFFECT_QUESTION: {
-        display_.setFont(u8g2_font_ncenB08_tr);
-        int qY = 50 - (int)(fmod(effectTimer_ * 12.0f, 35.0f));
+        display_.setFont(u8g2_font_9x15_tr);
+        int qY = 25 - (int)(effectTimer_ * 15) % 35;
         if (qY > 8 && qY < 58) {
-          display_.drawStr(cx + 15, qY, "?");
+          display_.drawStr(cx + 20, qY, "?");
         }
         break;
       }
-      
+
       case EFFECT_THINKING_DOTS: {
-        int dotCount = ((int)(effectTimer_ * 2) % 3) + 1;
-        for (int i = 0; i < dotCount; i++) {
-          display_.drawDisc(cx + 15 + (i * 6), cy - 8, 2);
-        }
-        break;
+
       }
       
       case EFFECT_SCAN_BEAM: {
-        int beamY = 20 + (int)(sin(effectTimer_ * 3) * 12);
-        display_.drawBox(cx - 12, beamY, 24, 2);
-        break;
+        
       }
       
-      default:
-        break;
+      // Default / Other effects
+      default: break;
     }
   }
 };

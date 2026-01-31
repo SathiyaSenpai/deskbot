@@ -1,5 +1,5 @@
 // ============================================================================
-// COMPLETE FIXED main.cpp - ALL TIMING ISSUES RESOLVED
+// FINAL FIXED main.cpp - Fixes "Instant Animation Stop" Bug
 // ============================================================================
 
 #include <Arduino.h>
@@ -105,7 +105,7 @@ private:
 
 // --- STATE VARIABLES ---
 const Behavior* activeBehavior = nullptr;
-unsigned long behaviorStartTime = 0;  // CRITICAL: Renamed for clarity
+unsigned long behaviorStartTime = 0;
 unsigned long lastInteractionTime = 0;
 unsigned long lastIdleCheckTime = 0;
 bool inSleepMode = false;
@@ -114,9 +114,17 @@ bool inDarkSleepMode = false;
 const unsigned long IDLE_TO_SLEEPY_DELAY = 20000;
 
 // --- BEHAVIOR CONTROLLER ---
-void startBehavior(const char* name) {
+// FIXED: Accepts 'now' to prevent timing mismatch
+void startBehavior(const char* name, unsigned long now) {
   const Behavior* b = findBehavior(name);
   if (!b) return;
+
+  // Prevent re-triggering the same behavior repeatedly
+  if (activeBehavior && strcmp(activeBehavior->name, name) == 0) {
+      // If it's already playing, just reset the timer (keep it alive)
+      behaviorStartTime = now;
+      return; 
+  }
 
   Serial.printf("\n[BEHAVIOR] ===== STARTING: %s =====\n", name);
 
@@ -124,8 +132,7 @@ void startBehavior(const char* name) {
   if (strcmp(name, "sleeping") != 0 && strcmp(name, "sleepy_idle") != 0) {
     inSleepMode = false;
     inDarkSleepMode = false;
-    lastInteractionTime = millis();
-    Serial.println("[BEHAVIOR] Reset interaction timer");
+    lastInteractionTime = now;
   }
 
   // Protect active states from sleepy override
@@ -133,7 +140,6 @@ void startBehavior(const char* name) {
     if (activeBehavior && (strcmp(activeBehavior->name, "happy") == 0 ||
                            strcmp(activeBehavior->name, "surprised") == 0 ||
                            strcmp(activeBehavior->name, "listening") == 0)) {
-      Serial.println("[BEHAVIOR] Blocked sleepy (active emotion)");
       return; 
     }
     inSleepMode = true;
@@ -143,86 +149,57 @@ void startBehavior(const char* name) {
   }
 
   activeBehavior = b;
-  behaviorStartTime = millis();  // CRITICAL: Record start time
-  
-  // Calculate total duration
-  unsigned long totalDuration = b->entryTime + b->holdTime + b->exitTime;
-  Serial.printf("[BEHAVIOR] Timing: entry=%dms hold=%dms exit=%dms TOTAL=%dms\n",
-                b->entryTime, b->holdTime, b->exitTime, totalDuration);
+  behaviorStartTime = now; // CRITICAL: Use the synchronized 'now' time
   
   // 1. SET EYE TARGET
-  Serial.println("[BEHAVIOR] Setting eye target...");
   eye.setTarget(b);
   
   // 2. SET LED MOOD
-  Serial.print("[BEHAVIOR] Setting LED mood: ");
-  if (b->ledEffect) {
-    Serial.println(b->ledEffect);
-    leds.setMood(b->ledEffect);
-  } else {
-    Serial.println(name);
-    leds.setMood(name);
-  }
+  if (b->ledEffect) leds.setMood(b->ledEffect);
+  else leds.setMood(name);
   
   // 3. SERVO & SOUND ACTIONS
-  if (strcmp(name, "happy") == 0) {
-    Serial.println("[BEHAVIOR] Servo: NOD gesture");
+  if (strcmp(name, "happy") == 0 || strcmp(name, "shy_happy") == 0) {
     servo.triggerGesture("nod");
     soundFx.play("happy");
   } 
-  else if (strcmp(name, "shy_happy") == 0) {
-    Serial.println("[BEHAVIOR] Servo: NOD gesture (shy)");
-    servo.triggerGesture("nod");
-    soundFx.play("happy");
-  }
   else if (strcmp(name, "sad") == 0) {
-    Serial.println("[BEHAVIOR] Servo: DROOP (120°)");
     servo.setTarget(120); 
     soundFx.play("sad");
   }
   else if (strcmp(name, "surprised") == 0 || strcmp(name, "startled") == 0) {
-    Serial.println("[BEHAVIOR] Servo: ALERT (80°)");
     servo.setTarget(80); 
     soundFx.play("surprised");
   }
   else if (strcmp(name, "curious_idle") == 0) {
-    Serial.println("[BEHAVIOR] Servo: TILT gesture");
     servo.triggerGesture("tilt");
     soundFx.play("curious");
   }
-  else if (strcmp(name, "sleepy_idle") == 0 || strcmp(name, "sleeping") == 0) {
-    Serial.println("[BEHAVIOR] Servo: SLEEPY (110°)");
+  else if (strcmp(name, "sleepy_idle") == 0) {
     servo.setTarget(110);
-    if (strcmp(name, "sleepy_idle") == 0) {
-      soundFx.play("sleep");
-    }
+    soundFx.play("sleep");
   }
-  else if (strcmp(name, "listening") == 0) {
-    Serial.println("[BEHAVIOR] Servo: CENTER (90°)");
-    servo.setTarget(90);
-  }
-  else if (strcmp(name, "calm_idle") == 0) {
-    Serial.println("[BEHAVIOR] Servo: CENTER (90°)");
+  else if (strcmp(name, "listening") == 0 || strcmp(name, "calm_idle") == 0) {
     servo.setTarget(90);
   }
   else if (strcmp(name, "confused") == 0) {
-    Serial.println("[BEHAVIOR] Servo: TILT (110°)");
     servo.setTarget(110);
   }
   else if (strcmp(name, "thinking") == 0) {
-    Serial.println("[BEHAVIOR] Servo: TILT (100°)");
     servo.setTarget(100);
   }
   else if (strcmp(name, "playful_mischief") == 0) {
-    Serial.println("[BEHAVIOR] Servo: SHAKE gesture");
     servo.triggerGesture("shake");
   }
 
   if (robotWs.isConnected()) {
     robotWs.sendStatus("sync_behavior", name);
   }
-  
-  Serial.printf("[BEHAVIOR] ===== STARTED: %s =====\n\n", name);
+}
+
+// Wrapper for calls without timestamp (uses millis)
+void startBehavior(const char* name) {
+    startBehavior(name, millis());
 }
 
 void handleMessage(const char* type, JsonDocument& doc) {
@@ -251,51 +228,29 @@ void setup() {
   delay(500);
   
   Serial.println("\n\n========================================");
-  Serial.println("  EMO DESKBOT - TIMING FIX VERSION");
+  Serial.println("  DESKBOT COMPANION - FINAL FIX");
   Serial.println("========================================\n");
 
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
-  
-  Serial.println("[INIT] Display...");
   display.begin();
-  display.clearBuffer();
-  display.setFont(u8g2_font_ncenB08_tr);
-  display.drawStr(10, 30, "DeskBot Init...");
-  display.sendBuffer();
-  
-  Serial.println("[INIT] LEDs...");
   leds.begin();
-  
-  Serial.println("[INIT] Servo...");
   servo.begin();
-  
-  Serial.println("[INIT] Sensors...");
   sensors.begin();
-  
-  Serial.println("[INIT] Sound...");
   soundFx.play("startup");
 
   Serial.println("[INIT] WiFi...");
   wifiMgr.begin();
   if (wifiMgr.autoConnect()) {
-      Serial.println("[INIT] Audio...");
       audioMgr.begin();
       robotWs.setServer(wifiMgr.getServerIP().c_str(), wifiMgr.getServerPort());
       robotWs.setCallback(handleMessage);
       robotWs.begin();
   }
   
-  Serial.println("[INIT] Eyes...");
   eye.startBootSequence();
-  
-  Serial.println("[INIT] Starting calm_idle...");
   startBehavior("calm_idle");
   lastInteractionTime = millis();
   lastIdleCheckTime = millis();
-  
-  Serial.println("\n========================================");
-  Serial.println("  INITIALIZATION COMPLETE!");
-  Serial.println("========================================\n");
 }
 
 void loop() {
@@ -308,25 +263,11 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     robotWs.loop();
     audioMgr.loop();
-    
-    static bool initialStateSent = false;
-    static unsigned long connectionTime = 0;
-    if (robotWs.isConnected() && activeBehavior && !initialStateSent) {
-      if (connectionTime == 0) connectionTime = now;
-      if (now - connectionTime > 500) {
-        robotWs.sendStatus("sync_behavior", activeBehavior->name);
-        initialStateSent = true;
-      }
-    }
-    if (!robotWs.isConnected()) {
-      initialStateSent = false;
-      connectionTime = 0;
-    }
   } else {
     wifiMgr.handlePortal();
   }
 
-  // 2. Component Updates - MUST UPDATE EVERY FRAME
+  // 2. Component Updates
   eye.update(dt);
   eye.render();
   leds.loop(dt);
@@ -335,95 +276,75 @@ void loop() {
 
   // 3. Sensor Logic
   static unsigned long lastSensor = 0;
-  static int sustainedSoundCounter = 0;
-  static bool wasMotionDetected = false;
-  static bool wasTouchDetected = false;
-  static uint16_t lastDistance = 0;
-  static int darknessCounter = 0;
-  static int lightCounter = 0;
-
+  
+  // SENSOR DEBOUNCE: Prevents glitchy repeated triggers
   if (now - lastSensor > 100) {
     lastSensor = now;
     SensorData d = sensors.read();
     bool activityDetected = false;
-    
-    // Microphone protection during servo movement only
     bool servoIsMoving = servo.isMoving();
     
-    // 1. TOUCH - Always highest priority
-    if (d.touchHead && !wasTouchDetected) {
-      wasTouchDetected = true;
-      Serial.println("\n[TOUCH] HEAD TOUCHED!");
-      startBehavior("happy"); 
+    // 1. TOUCH
+    if (d.touchHead) {
+      // Only trigger if we aren't ALREADY happy (prevents restart spam)
+      if (!activeBehavior || strcmp(activeBehavior->name, "happy") != 0) {
+          Serial.println("\n[TOUCH] HEAD TOUCHED!");
+          startBehavior("happy", now); 
+      }
       activityDetected = true;
     } 
-    else if (d.touchSide && !wasTouchDetected) {
-      wasTouchDetected = true;
-      Serial.println("\n[TOUCH] SIDE TOUCHED!");
-      startBehavior("shy_happy");
+    else if (d.touchSide) {
+      if (!activeBehavior || strcmp(activeBehavior->name, "shy_happy") != 0) {
+          Serial.println("\n[TOUCH] SIDE TOUCHED!");
+          startBehavior("shy_happy", now);
+      }
       activityDetected = true;
     } 
-    else if (!d.touchHead && !d.touchSide) {
-      wasTouchDetected = false;
-    }
 
-    // 2. MOTION - Always responsive
-    if (d.motion && !wasMotionDetected) {
-      wasMotionDetected = true;
-      Serial.println("\n[MOTION] DETECTED!");
-      startBehavior("surprised");
-      activityDetected = true;
-    } else if (!d.motion) {
-      wasMotionDetected = false;
+    // 2. MOTION
+    if (d.motion) {
+       if (!activeBehavior || (strcmp(activeBehavior->name, "surprised") != 0 && strcmp(activeBehavior->name, "listening") != 0)) {
+          Serial.println("\n[MOTION] DETECTED!");
+          startBehavior("surprised", now);
+       }
+       activityDetected = true;
     }
     
-    // 3. DISTANCE - Always responsive
+    // 3. DISTANCE
     if (d.distance_mm > 0 && d.distance_mm < 150) {
-      if (lastDistance >= 150 || lastDistance == 0) {
+      if (!activeBehavior || strcmp(activeBehavior->name, "surprised") != 0) {
         Serial.printf("\n[DISTANCE] Close: %dmm\n", d.distance_mm);
-        startBehavior("surprised");
-        activityDetected = true;
+        startBehavior("surprised", now);
       }
+      activityDetected = true;
     } 
     else if (d.distance_mm > 150 && d.distance_mm < 400) {
-      if (lastDistance >= 400 || lastDistance < 150) {
+      if (!activeBehavior || strcmp(activeBehavior->name, "curious_idle") != 0) {
         Serial.printf("\n[DISTANCE] Medium: %dmm\n", d.distance_mm);
-        startBehavior("curious_idle");
-        activityDetected = true;
+        startBehavior("curious_idle", now);
       }
+      activityDetected = true;
     }
-    lastDistance = d.distance_mm;
 
-    // 4. MICROPHONE - Only when servo not moving
+    // 4. MICROPHONE
     #if ENABLE_MICROPHONE
-    int vol = micMgr.getLoudness();
-    
     if (!servoIsMoving) {
+      int vol = micMgr.getLoudness();
       if (vol > 40) {
-        Serial.printf("\n[MIC] Loud sound: %d\n", vol);
-        startBehavior("surprised");
+        startBehavior("surprised", now);
         activityDetected = true;
       } 
       else if (vol > 15) {
-        sustainedSoundCounter++;
-        if (sustainedSoundCounter > 10) {
-          Serial.printf("\n[MIC] Sustained: %d\n", vol);
-          startBehavior("listening");
-          activityDetected = true;
-        }
-      } else {
-        if (sustainedSoundCounter > 0) sustainedSoundCounter--;
+        startBehavior("listening", now);
+        activityDetected = true;
       }
-      
       if (vol > 10) leds.voiceReact(vol);
     }
     #endif
 
-    // 5. Reset timers on activity
+    // 5. Reset sleep timers
     if (activityDetected) {
       lastInteractionTime = now;
-      darknessCounter = 0;
-      lightCounter = 0;
       inSleepMode = false;
       inDarkSleepMode = false;
     }
@@ -431,29 +352,15 @@ void loop() {
     // 6. DARKNESS LOGIC
     if (now - lastInteractionTime > 15000) { 
       if (d.light > 3000) { 
-        darknessCounter++;
-        lightCounter = 0;
-        
-        if (darknessCounter > 30 && !inDarkSleepMode) { 
-          Serial.println("\n[DARK] Going to sleep...");
-          startBehavior("sleeping");
-        }
+         if (!inDarkSleepMode) { 
+           startBehavior("sleeping", now);
+         }
       } 
-      else {
-        lightCounter++;
-        if (lightCounter > 10) { 
-          darknessCounter = 0;
-          if (inDarkSleepMode) {
-            Serial.println("\n[LIGHT] Waking up!");
-            startBehavior("calm_idle");
-          }
-        }
+      else if (inDarkSleepMode) {
+         startBehavior("calm_idle", now);
       }
-    } else {
-      darknessCounter = 0;
-      lightCounter = 0;
     }
-
+    
     if (robotWs.isConnected()) robotWs.sendSensors(d);
   }
   
@@ -465,35 +372,28 @@ void loop() {
     if (!inDarkSleepMode && activeBehavior && idleTime > IDLE_TO_SLEEPY_DELAY && !inSleepMode) {
       if (strcmp(activeBehavior->name, "sleepy_idle") != 0 && 
           strcmp(activeBehavior->name, "sleeping") != 0) {
-        Serial.println("\n[IDLE] 20s timeout -> Sleepy");
-        startBehavior("sleepy_idle");
+        startBehavior("sleepy_idle", now);
       }
     }
   }
   
-  // 5. CRITICAL FIX: Auto-return from timed behaviors
-  // ONLY check this if behavior has a holdTime > 0
+  // 5. AUTO-RETURN (FIXED MATH)
   if (activeBehavior && activeBehavior->holdTime > 0) {
     unsigned long elapsed = now - behaviorStartTime;
     unsigned long totalDuration = activeBehavior->entryTime + 
                                    activeBehavior->holdTime + 
                                    activeBehavior->exitTime;
     
-    // Debug every second during behavior
-    static unsigned long lastBehaviorDebug = 0;
-    if (now - lastBehaviorDebug > 1000) {
-      Serial.printf("[BEHAVIOR TIMING] %s: elapsed=%lums / total=%lums (%.1f%%)\n",
-                    activeBehavior->name, elapsed, totalDuration, 
-                    (float)elapsed / totalDuration * 100.0f);
-      lastBehaviorDebug = now;
-    }
-    
-    if (elapsed > totalDuration) {
-      Serial.printf("\n[AUTO-RETURN] %s completed (ran for %lums) -> calm_idle\n", 
+    // Add 500ms grace period to allow smooth morphing completion
+    if (elapsed > totalDuration + 500) {
+      Serial.printf("\n[AUTO-RETURN] %s finished (%lums) -> calm_idle\n", 
                     activeBehavior->name, elapsed);
-      startBehavior("calm_idle");
+      
+      // Only return if we're not already calm
+      if (strcmp(activeBehavior->name, "calm_idle") != 0) {
+        startBehavior("calm_idle", now);
+      }
     }
-  }
-  
+}
   yield();
 }

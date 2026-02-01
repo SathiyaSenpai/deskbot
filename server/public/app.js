@@ -323,14 +323,38 @@ function setBehavior(name) {
 }
 
 function updateSensors(data) {
-  if (elements.sensorDist) elements.sensorDist.innerText = (data.distance_mm || 0) + 'mm';
+  // Use readable text for distance
+  if (elements.sensorDist) {
+    const distance = data.distance_mm || 0;
+    if (distance === 0) {
+      elements.sensorDist.innerText = 'No reading';
+    } else if (distance < 100) {
+      elements.sensorDist.innerText = 'Very close';
+    } else if (distance < 300) {
+      elements.sensorDist.innerText = 'Near';
+    } else {
+      elements.sensorDist.innerText = 'Far';
+    }
+  }
+  
   if (elements.sensorTouch) elements.sensorTouch.innerText = data.touch_head ? 'Yes' : 'No';
   
   const sensorLight = document.getElementById('sensorLight');
   const sensorMotion = document.getElementById('sensorMotion');
   const sensorSound = document.getElementById('sensorSound');
   
-  if (sensorLight) sensorLight.innerText = data.light || 'â€”';
+  // Use readable text for light
+  if (sensorLight) {
+    const light = data.light || 0;
+    if (light > 2000) {
+      sensorLight.innerText = 'Bright';
+    } else if (light > 1000) {
+      sensorLight.innerText = 'Dim';
+    } else {
+      sensorLight.innerText = 'Dark';
+    }
+  }
+  
   if (sensorMotion) sensorMotion.innerText = data.motion ? 'Yes' : 'No';
   if (sensorSound) sensorSound.innerText = (data.soundLevel || 0) + '%';
 }

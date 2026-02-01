@@ -94,8 +94,8 @@ export const AI_CONFIG = {
     ollamaUrl: 'http://localhost:11434',
     
     // Gemini settings (FREE - 15 req/min)
-    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyBhitK6oZowfofwyMfuU5qddAFZZQ5_VOM',
-    geminiModel: 'gemini-1.5-flash',
+    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyAVGFjlGWlGZRpOp1CBvAFI2sBt4WEoiUw',
+    geminiModel: 'Gemini API Key',
   },
   
   // Robot personality prompt
@@ -409,6 +409,7 @@ function getFallbackResponse(userMessage) {
     love: ['love you', 'cute', 'nice'],
     time: ['time', 'நேரம்'],
     weather: ['weather', 'வானிலை'],
+    tamil: ['tamil theriyuma', 'tamil teriyuma', 'do you know tamil', 'tamil pesalama']
   };
   
   if (responses.greetings.some(g => msg.includes(g))) {
@@ -431,6 +432,9 @@ function getFallbackResponse(userMessage) {
   }
   if (responses.time.some(g => msg.includes(g))) {
     return `Ippo time: ${new Date().toLocaleTimeString('en-IN')} ⏰`;
+  }
+  if (responses.tamil.some(g => msg.includes(g))) {
+    return ['Aamam! Tamil theriyum! 😄 Pesalama!', 'Of course! Naan Tamil-la pesuven! 🇮🇳', 'Tamil theriyum da! Enna venalum kelu! 😊'][Math.floor(Math.random() * 3)];
   }
   
   // Default responses

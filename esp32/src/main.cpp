@@ -206,8 +206,14 @@ void startBehavior(const char* name) {
     startBehavior(name, millis());
 }
 
+// Track if behavior was triggered from web UI (don't override with sensors)
+bool webBehaviorActive = false;
+unsigned long webBehaviorTime = 0;
+
 void handleMessage(const char* type, JsonDocument& doc) {
   if (strcmp(type, "set_behavior") == 0) {
+    webBehaviorActive = true;
+    webBehaviorTime = millis();
     startBehavior(doc["name"]);
   }
   else if (strcmp(type, "servo_action") == 0) {
@@ -215,15 +221,22 @@ void handleMessage(const char* type, JsonDocument& doc) {
     lastInteractionTime = millis();
   }
   else if (strcmp(type, "led_action") == 0) {
-    // Handle LED color commands from web UI
+    // Handle LED color commands from web UI - supports hex colors
     const char* color = doc["color"];
     if (color) {
-      if (strcmp(color, "off") == 0) {
-        leds.setMood("sleeping"); // Dim mode
-      } else {
-        leds.setMood(color); // Direct color name
-      }
       Serial.printf("[LED] Web command: %s\n", color);
+      
+      if (strcmp(color, "off") == 0) {
+        leds.setMood("sleeping");
+      } 
+      else if (strcmp(color, "#ff0000") == 0) leds.setMood("red");
+      else if (strcmp(color, "#00ff00") == 0) leds.setMood("green");
+      else if (strcmp(color, "#0000ff") == 0) leds.setMood("blue");
+      else if (strcmp(color, "#ffff00") == 0) leds.setMood("happy");
+      else if (strcmp(color, "#ff00ff") == 0) leds.setMood("purple");
+      else if (strcmp(color, "#00ffff") == 0) leds.setMood("cyan");
+      else if (strcmp(color, "#ffffff") == 0) leds.setMood("surprised");
+      else leds.setMood(color);
     }
     lastInteractionTime = millis();
   }
@@ -319,8 +332,11 @@ void loop() {
       activityDetected = true;
     } 
 
-    // 2. MOTION
-    if (d.motion) {
+    // Skip sensor triggers if web UI just sent a behavior command (let it play fully)
+    bool allowSensorTrigger = !webBehaviorActive || (now - webBehaviorTime > 3000);
+
+    // 2. MOTION (only if not in web-triggered behavior)
+    if (allowSensorTrigger && d.motion) {
        if (!activeBehavior || (strcmp(activeBehavior->name, "surprised") != 0 && strcmp(activeBehavior->name, "listening") != 0)) {
           Serial.println("\n[MOTION] DETECTED!");
           startBehavior("surprised", now);
@@ -328,15 +344,15 @@ void loop() {
        activityDetected = true;
     }
     
-    // 3. DISTANCE
-    if (d.distance_mm > 0 && d.distance_mm < 150) {
+    // 3. DISTANCE (only if not in web-triggered behavior)
+    if (allowSensorTrigger && d.distance_mm > 0 && d.distance_mm < 150) {
       if (!activeBehavior || strcmp(activeBehavior->name, "surprised") != 0) {
         Serial.printf("\n[DISTANCE] Close: %dmm\n", d.distance_mm);
         startBehavior("surprised", now);
       }
       activityDetected = true;
     } 
-    else if (d.distance_mm > 150 && d.distance_mm < 400) {
+    else if (allowSensorTrigger && d.distance_mm > 150 && d.distance_mm < 400) {
       if (!activeBehavior || strcmp(activeBehavior->name, "curious_idle") != 0) {
         Serial.printf("\n[DISTANCE] Medium: %dmm\n", d.distance_mm);
         startBehavior("curious_idle", now);

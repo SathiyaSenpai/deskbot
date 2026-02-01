@@ -400,14 +400,112 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
   
+  // =========================================================================
+  // PHONE MIC - Web Speech API Implementation
+  // =========================================================================
+  const micButton = document.getElementById('micButton');
+  const micIcon = micButton?.querySelector('.mic-icon');
+  const micStatus = micButton?.querySelector('.mic-status');
+  
+  // Check for browser support
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (micButton && SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN'; // Indian English
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    
+    let isListening = false;
+    
+    micButton.onclick = () => {
+      if (!state.isConnected) {
+        alert('Not connected to server');
+        return;
+      }
+      
+      if (isListening) {
+        recognition.stop();
+        return;
+      }
+      
+      try {
+        recognition.start();
+        isListening = true;
+        micButton.classList.add('listening');
+        if (micIcon) micIcon.textContent = '🔴';
+        if (micStatus) micStatus.textContent = 'Listening...';
+        console.log('[MIC] Speech recognition started');
+      } catch (err) {
+        console.error('[MIC] Failed to start:', err);
+      }
+    };
+    
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const confidence = event.results[0][0].confidence;
+      console.log(`[MIC] Recognized: "${transcript}" (confidence: ${(confidence * 100).toFixed(1)}%)`);
+      
+      // Send to chat
+      if (transcript.trim()) {
+        addMessage(transcript, 'user');
+        if (state.ws && state.isConnected) {
+          state.ws.send(JSON.stringify({ type: 'chat_message', text: transcript }));
+        }
+      }
+    };
+    
+    recognition.onerror = (event) => {
+      console.error('[MIC] Error:', event.error);
+      if (micStatus) {
+        switch(event.error) {
+          case 'no-speech':
+            micStatus.textContent = 'No speech detected';
+            break;
+          case 'audio-capture':
+            micStatus.textContent = 'No microphone found';
+            break;
+          case 'not-allowed':
+            micStatus.textContent = 'Mic permission denied';
+            break;
+          default:
+            micStatus.textContent = `Error: ${event.error}`;
+        }
+      }
+    };
+    
+    recognition.onend = () => {
+      isListening = false;
+      micButton.classList.remove('listening');
+      if (micIcon) micIcon.textContent = '🎤';
+      setTimeout(() => {
+        if (micStatus) micStatus.textContent = '';
+      }, 2000);
+      console.log('[MIC] Speech recognition ended');
+    };
+    
+    // Add visual hint that mic is available
+    micButton.title = 'Click to speak (Speech Recognition)';
+    micButton.style.opacity = '1';
+  } else if (micButton) {
+    // Browser doesn't support Speech Recognition
+    micButton.onclick = () => {
+      alert('Speech recognition not supported in this browser.\\nPlease use Chrome, Edge, or Safari.\\n\\nYou can still type messages below!');
+    };
+    micButton.title = 'Speech not supported - use text input';
+    micButton.style.opacity = '0.5';
+    console.log('[MIC] Speech Recognition not supported');
+  }
+  
   // Servo buttons
   const servoLeft = document.getElementById('servoLeft');
   const servoCenter = document.getElementById('servoCenter');
   const servoRight = document.getElementById('servoRight');
   
-  if (servoLeft) servoLeft.onclick = () => controlServo(45);
+  if (servoLeft) servoLeft.onclick = () => controlServo(65);   // Cardboard safe: 60-120
   if (servoCenter) servoCenter.onclick = () => controlServo(90);
-  if (servoRight) servoRight.onclick = () => controlServo(135);
+  if (servoRight) servoRight.onclick = () => controlServo(115); // Cardboard safe: 60-120
 
   // LED buttons
   document.querySelectorAll('.led-btn').forEach(btn => {

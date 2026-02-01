@@ -20,9 +20,18 @@ public:
     // 1. Check if mood is actually changing (Optimization)
     if (strcmp(mood, currentMood_) == 0) return;
     
+    // FLASH-ONCE FIX: Save previous mood before setting "surprised" so we can restore
+    if (strcmp(mood, "surprised") == 0 || strcmp(mood, "startled") == 0) {
+      if (strcmp(currentMood_, "surprised") != 0 && strcmp(currentMood_, "startled") != 0) {
+        strncpy(previousMood_, currentMood_, 15);
+        previousMood_[15] = '\0';
+      }
+    }
+    
     strncpy(currentMood_, mood, 15);
     currentMood_[15] = '\0';
     stateTimer_ = 0; // Reset animation timer
+    flashRestored_ = false; // Reset flash restore flag
     
     Serial.printf("[LED] Setting mood: %s\n", mood);
     
@@ -103,10 +112,20 @@ public:
     
     float brightness = calculateBrightness();
     
-    // Handle flash-once (Surprised) -> Automatically drift to steady after flash
-    if (animMode_ == ANIM_FLASH_ONCE && stateTimer_ > 0.3f) {
-        // Just dim it down, don't change state logic (Main loop handles logic)
-        brightness = minBrightness_; 
+    // FLASH-ONCE FIX: Auto-restore previous mood after flash completes
+    if (animMode_ == ANIM_FLASH_ONCE && stateTimer_ > 0.5f && !flashRestored_) {
+        flashRestored_ = true;
+        // Restore previous mood after flash effect
+        if (strlen(previousMood_) > 0) {
+          Serial.printf("[LED] Flash complete, restoring to: %s\n", previousMood_);
+          // Don't call setMood directly to avoid recursion - just update internal state
+          char moodToRestore[16];
+          strncpy(moodToRestore, previousMood_, 15);
+          moodToRestore[15] = '\0';
+          previousMood_[0] = '\0'; // Clear to prevent loop
+          setMood(moodToRestore);
+          return;
+        }
     }
     
     uint32_t finalColor = strip_.Color(r * brightness, g * brightness, b * brightness);
@@ -145,6 +164,8 @@ private:
   Adafruit_NeoPixel strip_;
   uint32_t targetColor_ = 0;
   char currentMood_[16] = "idle";
+  char previousMood_[16] = ""; // For restoring after flash
+  bool flashRestored_ = false; // Prevent multiple restore calls
   float stateTimer_ = 0.0f;
   
   // Animation parameters

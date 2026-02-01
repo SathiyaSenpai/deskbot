@@ -1059,7 +1059,10 @@ body {
 }
 
 .mic-button {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
   width: 44px;
   height: 44px;
   padding: 0;
@@ -1072,6 +1075,17 @@ body {
   transition: all 0.2s ease;
   position: relative;
   flex-shrink: 0;
+}
+
+.mic-button .mic-status {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #27ae60;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .mic-button:active:not(:disabled) {

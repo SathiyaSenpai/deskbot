@@ -17,116 +17,119 @@ class SensorManager {
 public:
   void begin() {
     pinMode(PIN_PIR, INPUT);
+    pinMode(PIN_LDR, INPUT);
     pinMode(PIN_ULTRASONIC_TRIG, OUTPUT);
     pinMode(PIN_ULTRASONIC_ECHO, INPUT);
-    pinMode(PIN_LDR, INPUT);
-    
-    // Initialize ultrasonic to LOW
     digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
     
-    Serial.println("[SENSORS] Initialized");
+    Serial.println("[SENSORS] Initialized (Simple ultrasonic)");
     Serial.printf("  PIR: %d\n", PIN_PIR);
     Serial.printf("  Ultrasonic: Trig=%d, Echo=%d\n", PIN_ULTRASONIC_TRIG, PIN_ULTRASONIC_ECHO);
     Serial.printf("  Touch: Head=%d, Side=%d, Threshold=%d\n", PIN_TOUCH_HEAD, PIN_TOUCH_SIDE, TOUCH_THRESHOLD);
+    
+    // Test ultrasonic sensor immediately
+    Serial.println("[ULTRASONIC] Running connection test...");
+    testUltrasonicConnection();
   }
 
-  // FIXED: Improved reading sequence with better debounce
+  void update() {
+    // Update distance reading every 200ms (throttled)
+    static unsigned long lastDistanceRead = 0;
+    if (millis() - lastDistanceRead > 200) {
+      lastDistanceRead = millis();
+      lastDistance_ = readDistanceSimple();
+    }
+  }
+
   SensorData read() {
     SensorData d;
     
-    // 1. Read ambient sensors first (no interference)
+    // 1. Read ambient sensors (fast, non-blocking)
     d.light = analogRead(PIN_LDR);
     d.motion = digitalRead(PIN_PIR) == HIGH;
     
-    // 2. Read TOUCH with triple verification (eliminate false triggers)
-    int touchHead1 = touchRead(PIN_TOUCH_HEAD);
-    int touchSide1 = touchRead(PIN_TOUCH_SIDE);
+    // 2. Read TOUCH with simpler verification
+    int touchHead = touchRead(PIN_TOUCH_HEAD);
+    int touchSide = touchRead(PIN_TOUCH_SIDE);
     
-    delayMicroseconds(500);
+    d.touchHead = (touchHead < TOUCH_THRESHOLD);
+    d.touchSide = (touchSide < TOUCH_THRESHOLD);
     
-    int touchHead2 = touchRead(PIN_TOUCH_HEAD);
-    int touchSide2 = touchRead(PIN_TOUCH_SIDE);
-    
-    delayMicroseconds(500);
-    
-    int touchHead3 = touchRead(PIN_TOUCH_HEAD);
-    int touchSide3 = touchRead(PIN_TOUCH_SIDE);
-    
-    // All three readings must be below threshold
-    d.touchHead = (touchHead1 < TOUCH_THRESHOLD && 
-                   touchHead2 < TOUCH_THRESHOLD && 
-                   touchHead3 < TOUCH_THRESHOLD);
-    
-    d.touchSide = (touchSide1 < TOUCH_THRESHOLD && 
-                   touchSide2 < TOUCH_THRESHOLD && 
-                   touchSide3 < TOUCH_THRESHOLD);
-    
-    // Debug output for touch calibration
+    // Debug output for touch calibration (less frequent)
     static unsigned long lastDebug = 0;
-    if (millis() - lastDebug > 2000) {
-      Serial.printf("[TOUCH] Head: %d/%d/%d (avg:%d), Side: %d/%d/%d (avg:%d)\n", 
-                    touchHead1, touchHead2, touchHead3, (touchHead1+touchHead2+touchHead3)/3,
-                    touchSide1, touchSide2, touchSide3, (touchSide1+touchSide2+touchSide3)/3);
+    if (millis() - lastDebug > 3000) {
+      Serial.printf("[TOUCH] Head: %d, Side: %d (threshold: %d)\n", 
+                    touchHead, touchSide, TOUCH_THRESHOLD);
       lastDebug = millis();
     }
 
-    // 3. Read DISTANCE LAST (ultrasonic generates noise)
-    d.distance_mm = measureDistance();
-    
+    // 3. Use cached distance (updated by update() method)
+    d.distance_mm = lastDistance_;
     
     d.soundLevel = 0; // Will be set separately if mic enabled
     return d;
-
   }
 
-  uint16_t measureDistance() {
-    // FIXED: Improved ultrasonic measurement with timeout and averaging
-    const int numReadings = 3;
-    long totalDuration = 0;
-    int validReadings = 0;
-    
-    for (int i = 0; i < numReadings; i++) {
+private:
+  uint16_t lastDistance_ = 0;
+
+  void testUltrasonicConnection() {
+    // Test if sensor is connected properly
+    for (int i = 0; i < 3; i++) {
       digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
       delayMicroseconds(2);
       digitalWrite(PIN_ULTRASONIC_TRIG, HIGH);
       delayMicroseconds(10);
       digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
       
-      // Timeout after 30ms (max ~5m range)
-      long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 30000);
+      unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 10000); // 10ms timeout
       
-      if (duration > 0 && duration < 25000) {  // Valid range: 4mm to 4m
-        totalDuration += duration;
-        validReadings++;
+      Serial.printf("[ULTRASONIC] Test %d: duration=%lu us", i+1, duration);
+      
+      if (duration > 0) {
+        uint16_t distance = (duration * 343) / 2000;
+        Serial.printf(" -> %d mm\n", distance);
+      } else {
+        Serial.println(" -> NO ECHO");
       }
-      
-      if (i < numReadings - 1) delayMicroseconds(100);
+      delay(100);
     }
-    
-    if (validReadings == 0) return 0;  // No valid reading
-    
-    // Calculate average distance
-    long avgDuration = totalDuration / validReadings;
-    uint16_t distance = (avgDuration * 343) / 2000;  // Speed of sound: 343 m/s
-    
-    // Filter unrealistic values
-    if (distance < 20 || distance > 4000) return 0;
-    
-    // Debug output
-    static unsigned long lastDistDebug = 0;
-    static uint16_t lastDist = 0;
-    if (millis() - lastDistDebug > 1000 && abs(distance - lastDist) > 50) {
-      Serial.printf("[ULTRASONIC] Distance: %d mm (%d valid readings)\n", distance, validReadings);
-      lastDistDebug = millis();
-      lastDist = distance;
-    }
-    
-    return distance;
   }
 
-  bool isTriggered() {
-    SensorData data = read();
-    return data.motion || data.touchHead || data.touchSide || data.distance_mm > 0;
+  uint16_t readDistanceSimple() {
+    // Simple single reading with short timeout to minimize freeze
+    digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
+    delayMicroseconds(2);
+    digitalWrite(PIN_ULTRASONIC_TRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
+    
+    // Shorter timeout (5ms) to reduce potential freeze
+    unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 5000);
+    
+    if (duration > 0 && duration < 20000) { // Valid range check
+      uint16_t distance = (duration * 343) / 2000;
+      
+      // Filter out unrealistic values
+      if (distance >= 5 && distance <= 400) { // 5mm to 400cm range
+        static unsigned long lastGoodReading = 0;
+        static uint16_t lastGoodDistance = 0;
+        
+        // Debug output for good readings
+        if (millis() - lastGoodReading > 1000) {
+          if (abs((int)distance - (int)lastGoodDistance) > 20) {
+            Serial.printf("[ULTRASONIC] Distance: %d mm\n", distance);
+            lastGoodReading = millis();
+            lastGoodDistance = distance;
+          }
+        }
+        
+        return distance;
+      }
+    }
+    
+    // Return 0 for invalid readings
+    return 0;
   }
 };
 

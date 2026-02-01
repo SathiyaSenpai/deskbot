@@ -23,6 +23,45 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ============================================================================
+// AUDIO FILE CLEANUP - Prevents disk filling up during demo
+// ============================================================================
+function cleanupOldAudio() {
+  const audioDir = path.join(__dirname, 'audio');
+  if (!fs.existsSync(audioDir)) return;
+  
+  const now = Date.now();
+  const maxAge = 5 * 60 * 1000; // 5 minutes
+  
+  try {
+    const files = fs.readdirSync(audioDir);
+    let cleaned = 0;
+    
+    for (const file of files) {
+      if (!file.endsWith('.mp3')) continue;
+      
+      const filePath = path.join(audioDir, file);
+      const stats = fs.statSync(filePath);
+      const age = now - stats.mtimeMs;
+      
+      if (age > maxAge) {
+        fs.unlinkSync(filePath);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`[CLEANUP] Removed ${cleaned} old audio file(s)`);
+    }
+  } catch (err) {
+    console.error('[CLEANUP] Error:', err.message);
+  }
+}
+
+// Run cleanup on startup and every 10 minutes
+cleanupOldAudio();
+setInterval(cleanupOldAudio, 10 * 60 * 1000);
+
+// ============================================================================
 // CONFIGURATION
 // ============================================================================
 

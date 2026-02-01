@@ -158,38 +158,42 @@ void startBehavior(const char* name, unsigned long now) {
   if (b->ledEffect) leds.setMood(b->ledEffect);
   else leds.setMood(name);
   
-  // 3. SERVO & SOUND ACTIONS
+  // 3. SERVO & SOUND ACTIONS (synced to behavior durations for natural movement)
+  // Calculate total behavior duration for auto-return
+  unsigned long behaviorDuration = b->entryTime + b->holdTime + b->exitTime;
+  if (behaviorDuration == 0) behaviorDuration = 5000; // Default for infinite behaviors
+  
   if (strcmp(name, "happy") == 0 || strcmp(name, "shy_happy") == 0) {
-    servo.triggerGesture("nod");
+    servo.triggerGesture("shake", behaviorDuration); // Shake converted from nod for cardboard
     soundFx.play("happy");
   } 
   else if (strcmp(name, "sad") == 0) {
-    servo.setTarget(120); 
+    servo.setTarget(70, behaviorDuration); // Droop left (cardboard safe: 60-120)
     soundFx.play("sad");
   }
   else if (strcmp(name, "surprised") == 0 || strcmp(name, "startled") == 0) {
-    servo.setTarget(80); 
+    servo.setTarget(75, behaviorDuration); // Quick jolt left
     soundFx.play("surprised");
   }
   else if (strcmp(name, "curious_idle") == 0) {
-    servo.triggerGesture("tilt");
+    servo.triggerGesture("tilt", behaviorDuration);
     soundFx.play("curious");
   }
   else if (strcmp(name, "sleepy_idle") == 0) {
-    servo.setTarget(110);
+    servo.setTarget(100, behaviorDuration); // Slight tilt
     soundFx.play("sleep");
   }
   else if (strcmp(name, "listening") == 0 || strcmp(name, "calm_idle") == 0) {
-    servo.setTarget(90);
+    servo.returnToCenter(); // Always center for these
   }
   else if (strcmp(name, "confused") == 0) {
-    servo.setTarget(110);
+    servo.setTarget(105, behaviorDuration); // Tilt right
   }
   else if (strcmp(name, "thinking") == 0) {
-    servo.setTarget(100);
+    servo.setTarget(95, behaviorDuration); // Slight tilt
   }
   else if (strcmp(name, "playful_mischief") == 0) {
-    servo.triggerGesture("shake");
+    servo.triggerGesture("shake", behaviorDuration);
   }
 
   if (robotWs.isConnected()) {
@@ -207,7 +211,20 @@ void handleMessage(const char* type, JsonDocument& doc) {
     startBehavior(doc["name"]);
   }
   else if (strcmp(type, "servo_action") == 0) {
-    servo.setTarget(doc["angle"]);
+    servo.setTarget(doc["angle"], 3000); // Auto-return after 3s
+    lastInteractionTime = millis();
+  }
+  else if (strcmp(type, "led_action") == 0) {
+    // Handle LED color commands from web UI
+    const char* color = doc["color"];
+    if (color) {
+      if (strcmp(color, "off") == 0) {
+        leds.setMood("sleeping"); // Dim mode
+      } else {
+        leds.setMood(color); // Direct color name
+      }
+      Serial.printf("[LED] Web command: %s\n", color);
+    }
     lastInteractionTime = millis();
   }
   else if (strcmp(type, "play_audio") == 0) {
@@ -273,6 +290,7 @@ void loop() {
   leds.loop(dt);
   servo.loop(dt);
   soundFx.update();
+  sensors.update(); // NON-BLOCKING: Updates async ultrasonic sensor
 
   // 3. Sensor Logic
   static unsigned long lastSensor = 0;

@@ -18,6 +18,7 @@
 #include "audio_manager.h"
 #include "mic_manager.h"
 #include "wifi_manager.h"
+#include "rtc_manager.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
@@ -31,6 +32,7 @@ RobotWebSocket robotWs;
 AudioManager audioMgr;
 MicManager micMgr;
 WiFiManager wifiMgr;
+RTCManager rtcMgr;
 
 // --- SOUND MANAGER ---
 class SoundManager {
@@ -249,6 +251,25 @@ void handleMessage(const char* type, JsonDocument& doc) {
       robotWs.sendStatus("sync_behavior", activeBehavior->name);
     }
   }
+  // ============= STOPWATCH COMMANDS =============
+  else if (strcmp(type, "stopwatch_start") == 0) {
+    rtcMgr.stopwatchStart();
+  }
+  else if (strcmp(type, "stopwatch_stop") == 0) {
+    rtcMgr.stopwatchStop();
+  }
+  else if (strcmp(type, "stopwatch_reset") == 0) {
+    rtcMgr.stopwatchReset();
+  }
+  // ============= ALARM COMMANDS =============
+  else if (strcmp(type, "set_alarm") == 0) {
+    int hour = doc["hour"] | -1;
+    int minute = doc["minute"] | -1;
+    rtcMgr.setAlarm(hour, minute);
+  }
+  else if (strcmp(type, "dismiss_alarm") == 0) {
+    rtcMgr.dismissAlarm();
+  }
 }
 
 // --- SETUP ---
@@ -266,6 +287,7 @@ void setup() {
   leds.begin();
   servo.begin();
   sensors.begin();
+  rtcMgr.begin();
   soundFx.play("startup");
 
   Serial.println("[INIT] WiFi...");
@@ -299,11 +321,30 @@ void loop() {
 
   // 2. Component Updates
   eye.update(dt);
-  eye.render();
   leds.loop(dt);
   servo.loop(dt);
   soundFx.update();
   sensors.update(); // NON-BLOCKING: Updates async ultrasonic sensor
+  
+  // Check alarm
+  rtcMgr.checkAlarm();
+  if (rtcMgr.isAlarmTriggered()) {
+    startBehavior("surprised");
+    soundFx.play("surprised");
+    leds.setMood("surprised");
+    Serial.println(F("[ALARM] WAKE UP!"));
+  }
+  
+  // Update stopwatch display if running
+  if (rtcMgr.isStopwatchRunning()) {
+    int m, s, c;
+    rtcMgr.getStopwatchTime(m, s, c);
+    eye.showStopwatch(m, s, c);
+  } else {
+    eye.hideStopwatch();
+  }
+  
+  eye.render(); // Render after all updates
 
   // 3. Sensor Logic
   static unsigned long lastSensor = 0;

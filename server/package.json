@@ -1,8 +1,8 @@
 {
-  "name": "emo-deskbot-server",
+  "name": "deskbot-companion-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "WebSocket server for EMO Deskbot",
+  "description": "WebSocket server for DeskBot Companion",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

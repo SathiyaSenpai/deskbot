@@ -291,4 +291,5 @@
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src/detail/RequestHandler.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src/Preferences.h \
  /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/DNSServer/src/DNSServer.h \
- /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiUdp.h
+ /home/sathiya/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiUdp.h \
+ src/rtc_manager.h

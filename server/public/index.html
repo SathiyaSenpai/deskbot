@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="EMO-style AI desk robot control interface">
-  <title>EMO DeskBot - Control Dashboard</title>
+  <meta name="description" content="AI DeskBot companion control interface">
+  <title>DeskBot - Control Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- Top Status Bar -->
   <header class="status-bar">
-    <div class="robot-name" id="robotName">🤖 EMO DeskBot</div>
+    <div class="robot-name" id="robotName">🤖 DeskBot Companion</div>
     <div class="connection" id="connectionStatus" data-status="disconnected">
       <span class="status-indicator">●</span>
       <span class="status-text">Disconnected</span>
@@ -30,7 +30,7 @@
           <div class="eye" id="eyeLeft"></div>
           <div class="eye" id="eyeRight"></div>
         </div>
-        <div class="robot-name-label">EMO</div>
+        <div class="robot-name-label">DESKBOT</div>
         <div class="behavior-label" id="currentBehavior">calm_idle</div>
       </div>
       
@@ -86,12 +86,49 @@
           <span class="info-value" id="sensorSound">—</span>
         </div>
       </div>
+      
+      <!-- Demo Controls -->
+      <div class="demo-panel">
+        <h4>🎬 Demo Controls</h4>
+        
+        <!-- Quick Expressions -->
+        <div class="demo-section">
+          <label>😊 Quick Expressions</label>
+          <div class="btn-row">
+            <button class="demo-btn" onclick="sendBehavior('happy')">😊</button>
+            <button class="demo-btn" onclick="sendBehavior('sad')">😢</button>
+            <button class="demo-btn" onclick="sendBehavior('surprised')">😲</button>
+            <button class="demo-btn" onclick="sendBehavior('angry')">😠</button>
+          </div>
+        </div>
+        
+        <!-- Stopwatch -->
+        <div class="demo-section">
+          <label>⏱️ Stopwatch</label>
+          <div class="stopwatch-display" id="stopwatchDisplay">00:00.00</div>
+          <div class="btn-row">
+            <button class="demo-btn" onclick="stopwatchStart()">▶️ Start</button>
+            <button class="demo-btn" onclick="stopwatchStop()">⏸️ Stop</button>
+            <button class="demo-btn" onclick="stopwatchReset()">🔄 Reset</button>
+          </div>
+        </div>
+        
+        <!-- Alarm -->
+        <div class="demo-section">
+          <label>⏰ Alarm</label>
+          <div class="alarm-row">
+            <input type="time" id="alarmTime" value="07:00">
+            <button class="demo-btn" onclick="setAlarm()">⏰ Set</button>
+            <button class="demo-btn" onclick="dismissAlarm()">🔕 Dismiss</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Right: Chat Panel -->
     <section class="chat-panel" aria-label="Conversation">
       <div class="chat-header">
-        <h2>💬 Chat with EMO</h2>
+        <h2>💬 Chat with DeskBot</h2>
         <div class="chat-actions">
           <button id="servoLeft" class="servo-btn" title="Look Left">⬅️</button>
           <button id="servoCenter" class="servo-btn" title="Center">⏺️</button>
@@ -101,7 +138,7 @@
       <div class="chat-messages" id="chatMessages">
         <!-- Messages will be added dynamically by JavaScript -->
         <div class="message robot">
-          <div class="message-content">வணக்கம்! I'm EMO, your desk companion 😊</div>
+          <div class="message-content">வணக்கம்! I'm your friendly DeskBot companion 😊</div>
           <div class="message-time">Just now</div>
         </div>
       </div>
@@ -119,7 +156,7 @@
       type="text" 
       id="messageInput" 
       class="message-input"
-      placeholder="Say something to EMO..." 
+      placeholder="Say something to your companion..." 
       disabled
       autocomplete="off"
       maxlength="500"

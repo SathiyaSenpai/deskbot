@@ -179,6 +179,20 @@ wss.on('connection', (ws, req) => {
                         robotWs.send(JSON.stringify(msg));
                     }
                 } 
+                // Handle stopwatch commands
+                else if (msg.type === 'stopwatch_start' || msg.type === 'stopwatch_stop' || msg.type === 'stopwatch_reset') {
+                    console.log(`⏱️ Stopwatch: ${msg.type}`);
+                    if (robotWs && robotWs.readyState === 1) {
+                        robotWs.send(JSON.stringify(msg));
+                    }
+                }
+                // Handle alarm commands
+                else if (msg.type === 'set_alarm' || msg.type === 'dismiss_alarm') {
+                    console.log(`⏰ Alarm: ${msg.type}`);
+                    if (robotWs && robotWs.readyState === 1) {
+                        robotWs.send(JSON.stringify(msg));
+                    }
+                }
                 // Forward Buttons (set_behavior, etc.) - also broadcast to other web clients
                 else if (robotWs && robotWs.readyState === 1) {
                     robotWs.send(JSON.stringify(msg));

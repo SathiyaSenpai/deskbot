@@ -1,4 +1,4 @@
-# EMO AI Desk Robot (ESP32)
+# DeskBot AI Companion (ESP32)
 
 A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node.js Brain.
 

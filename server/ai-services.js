@@ -1,5 +1,5 @@
 /**
- * AI Services Module for EMO Deskbot
+ * AI Services Module for DeskBot
  * 
  * Supports:
  * - Edge TTS (FREE, works everywhere - PC & Phone!)

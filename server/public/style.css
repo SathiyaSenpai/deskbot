@@ -920,6 +920,75 @@ body {
   color: #2c3e50;
 }
 
+/* Demo Panel */
+.demo-panel {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e8eaed;
+}
+
+.demo-panel h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #34495e;
+  margin: 0 0 12px 0;
+}
+
+.demo-section {
+  margin-bottom: 16px;
+}
+
+.demo-section label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7f8c8d;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.btn-row, .alarm-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.demo-btn {
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.demo-btn:hover {
+  background: #f0f0f0;
+  border-color: #667eea;
+}
+
+.stopwatch-display {
+  font-family: 'Courier New', monospace;
+  font-size: 24px;
+  font-weight: bold;
+  color: #667eea;
+  background: #000000;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.alarm-row input[type="time"] {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
 /* ================================================
    CHAT PANEL (Right Side)
    ================================================ */

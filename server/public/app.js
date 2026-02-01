@@ -550,3 +550,97 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   });
 });
+
+// ==============================================
+// Demo Panel Functions
+// ==============================================
+
+// Send behavior command
+function sendBehavior(behavior) {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ 
+      type: 'set_behavior', 
+      name: behavior 
+    }));
+    console.log('[DEMO] Behavior:', behavior);
+  }
+}
+
+// Stopwatch controls
+let stopwatchInterval = null;
+let stopwatchStartTime = null;
+let stopwatchElapsed = 0;
+
+function stopwatchStart() {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ type: 'stopwatch_start' }));
+  }
+  
+  // Local display update
+  if (!stopwatchInterval) {
+    stopwatchStartTime = Date.now() - stopwatchElapsed;
+    stopwatchInterval = setInterval(updateStopwatchDisplay, 10);
+  }
+}
+
+function stopwatchStop() {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ type: 'stopwatch_stop' }));
+  }
+  
+  if (stopwatchInterval) {
+    clearInterval(stopwatchInterval);
+    stopwatchInterval = null;
+    stopwatchElapsed = Date.now() - stopwatchStartTime;
+  }
+}
+
+function stopwatchReset() {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ type: 'stopwatch_reset' }));
+  }
+  
+  if (stopwatchInterval) {
+    clearInterval(stopwatchInterval);
+    stopwatchInterval = null;
+  }
+  stopwatchElapsed = 0;
+  updateStopwatchDisplay();
+}
+
+function updateStopwatchDisplay() {
+  const display = document.getElementById('stopwatchDisplay');
+  if (!display) return;
+  
+  let totalTime = stopwatchElapsed;
+  if (stopwatchInterval && stopwatchStartTime) {
+    totalTime = Date.now() - stopwatchStartTime;
+  }
+  
+  const minutes = Math.floor(totalTime / 60000);
+  const seconds = Math.floor((totalTime % 60000) / 1000);
+  const centiseconds = Math.floor((totalTime % 1000) / 10);
+  
+  display.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+}
+
+// Alarm controls  
+function setAlarm() {
+  const timeInput = document.getElementById('alarmTime');
+  if (!timeInput || !state.ws || !state.isConnected) return;
+  
+  const [hour, minute] = timeInput.value.split(':').map(Number);
+  state.ws.send(JSON.stringify({ 
+    type: 'set_alarm', 
+    hour: hour, 
+    minute: minute 
+  }));
+  console.log('[DEMO] Alarm set for', hour, ':', minute);
+}
+
+function dismissAlarm() {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ type: 'dismiss_alarm' }));
+    console.log('[DEMO] Alarm dismissed');
+  }
+}

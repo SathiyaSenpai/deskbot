@@ -204,15 +204,6 @@ public:
     }
   }
 
-  void render() {
-    display_.clearBuffer();
-    
-    drawEye(32, 32, false);  // Left eye
-    drawEye(96, 32, true);   // Right eye with effects
-    
-    display_.sendBuffer();
-  }
-
 private:
   U8G2& display_;
   
@@ -482,6 +473,66 @@ private:
       // Default / Other effects
       default: break;
     }
+  }
+  
+  // NEW: Stopwatch display mode
+  bool stopwatchMode_ = false;
+  int stopwatchMin_ = 0;
+  int stopwatchSec_ = 0;
+  int stopwatchCentis_ = 0;
+  
+public:
+  // NEW PUBLIC METHODS FOR STOPWATCH
+  
+  // Stopwatch display mode (no eyes, just large digits)
+  void showStopwatch(int minutes, int seconds, int centis) {
+    stopwatchMode_ = true;
+    stopwatchMin_ = minutes;
+    stopwatchSec_ = seconds;
+    stopwatchCentis_ = centis;
+  }
+  
+  void hideStopwatch() {
+    stopwatchMode_ = false;
+  }
+  
+  void render() {
+    display_.clearBuffer();
+    
+    // Special mode: Stopwatch display (no eyes)
+    if (stopwatchMode_) {
+      renderStopwatch();
+    } else {
+      renderEyes();
+    }
+    
+    display_.sendBuffer();
+  }
+  
+private:
+  void renderStopwatch() {
+    display_.setFont(u8g2_font_logisoso28_tn); // Large numeric font
+    
+    char timeStr[12];
+    snprintf(timeStr, sizeof(timeStr), "%02d:%02d", stopwatchMin_, stopwatchSec_);
+    
+    // Center the time display
+    int strWidth = display_.getStrWidth(timeStr);
+    int x = (128 - strWidth) / 2;
+    display_.drawStr(x, 42, timeStr);
+    
+    // Smaller centiseconds below
+    display_.setFont(u8g2_font_6x10_tr);
+    snprintf(timeStr, sizeof(timeStr), ".%02d", stopwatchCentis_);
+    display_.drawStr(x + strWidth + 2, 42, timeStr);
+    
+    // Label at top
+    display_.drawStr(40, 12, "STOPWATCH");
+  }
+  
+  void renderEyes() {
+    drawEye(32, 32, false);  // Left eye
+    drawEye(96, 32, true);   // Right eye with effects
   }
 };
 

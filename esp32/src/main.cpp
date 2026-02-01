@@ -216,7 +216,7 @@ void handleMessage(const char* type, JsonDocument& doc) {
   if (strcmp(type, "set_behavior") == 0) {
     webBehaviorActive = true;
     webBehaviorTime = millis();
-    startBehavior(doc["name"]);
+    startBehavior(doc["name"], millis()); // FIXED: Use millis() instead of wrapper
   }
   else if (strcmp(type, "servo_action") == 0) {
     servo.setTarget(doc["angle"], 3000); // Auto-return after 3s
@@ -260,15 +260,6 @@ void handleMessage(const char* type, JsonDocument& doc) {
   }
   else if (strcmp(type, "stopwatch_reset") == 0) {
     rtcMgr.stopwatchReset();
-  }
-  // ============= ALARM COMMANDS =============
-  else if (strcmp(type, "set_alarm") == 0) {
-    int hour = doc["hour"] | -1;
-    int minute = doc["minute"] | -1;
-    rtcMgr.setAlarm(hour, minute);
-  }
-  else if (strcmp(type, "dismiss_alarm") == 0) {
-    rtcMgr.dismissAlarm();
   }
 }
 
@@ -326,15 +317,6 @@ void loop() {
   soundFx.update();
   sensors.update(); // NON-BLOCKING: Updates async ultrasonic sensor
   
-  // Check alarm
-  rtcMgr.checkAlarm();
-  if (rtcMgr.isAlarmTriggered()) {
-    startBehavior("surprised");
-    soundFx.play("surprised");
-    leds.setMood("surprised");
-    Serial.println(F("[ALARM] WAKE UP!"));
-  }
-  
   // Update stopwatch display if running
   if (rtcMgr.isStopwatchRunning()) {
     int m, s, c;
@@ -374,7 +356,17 @@ void loop() {
     } 
 
     // Skip sensor triggers if web UI just sent a behavior command (let it play fully)
-    bool allowSensorTrigger = !webBehaviorActive || (now - webBehaviorTime > 3000);
+    // Use actual behavior duration instead of fixed 3000ms
+    unsigned long behaviorProtection = 3000; // Default
+    if (webBehaviorActive && activeBehavior) {
+      behaviorProtection = activeBehavior->entryTime + activeBehavior->holdTime + activeBehavior->exitTime + 500;
+    }
+    bool allowSensorTrigger = !webBehaviorActive || (now - webBehaviorTime > behaviorProtection);
+    
+    // Clear web behavior flag once protection period ends
+    if (webBehaviorActive && (now - webBehaviorTime > behaviorProtection)) {
+      webBehaviorActive = false;
+    }
 
     // 2. MOTION (only if not in web-triggered behavior)
     if (allowSensorTrigger && d.motion) {
@@ -459,8 +451,15 @@ void loop() {
                                    activeBehavior->holdTime + 
                                    activeBehavior->exitTime;
     
-    // Add 500ms grace period to allow smooth morphing completion
-    if (elapsed > totalDuration + 500) {
+    // For web behaviors, check if they should naturally end
+    if (webBehaviorActive && elapsed > totalDuration + 500) {
+      Serial.printf("\n[WEB-BEHAVIOR] %s finished (%lums) -> clearing webBehaviorActive\n", 
+                    activeBehavior->name, elapsed);
+      webBehaviorActive = false; // Clear the flag so AUTO-RETURN can work
+    }
+    
+    // Normal AUTO-RETURN logic (only if not web behavior)
+    if (!webBehaviorActive && elapsed > totalDuration + 500) {
       Serial.printf("\n[AUTO-RETURN] %s finished (%lums) -> calm_idle\n", 
                     activeBehavior->name, elapsed);
       

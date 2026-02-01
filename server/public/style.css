@@ -23,6 +23,9 @@ body {
   flex-direction: column;
   font-size: 15px;
   line-height: 1.6;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 /* ================================================
@@ -744,14 +747,15 @@ body {
 }
 
 .action-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+  justify-content: center;
 }
 
 .action-btn {
-  width: 100%;
-  aspect-ratio: 1;
+  width: 50px;
+  height: 50px;
   padding: 0;
   font-size: 20px;
   background: #f8f9fa;
@@ -948,7 +952,7 @@ body {
   margin-bottom: 8px;
 }
 
-.btn-row, .alarm-row {
+.btn-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -980,13 +984,6 @@ body {
   border-radius: 6px;
   text-align: center;
   margin-bottom: 12px;
-}
-
-.alarm-row input[type="time"] {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 12px;
 }
 
 /* ================================================

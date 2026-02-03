@@ -1,6 +1,6 @@
-esphome/ESP32-audioI2S @ ^2.0.7
-olikraus/U8g2 @ ^2.35.9
 bblanchon/ArduinoJson @ ^6.21.3
 madhephaestus/ESP32Servo @ ^1.2.1
-links2004/WebSockets @ ^2.4.1
 adafruit/Adafruit NeoPixel @ ^1.12.0
+earlephilhower/ESP8266Audio @ ^1.9.7
+olikraus/U8g2 @ ^2.35.9
+links2004/WebSockets @ ^2.4.1

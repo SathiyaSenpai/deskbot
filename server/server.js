@@ -4,7 +4,7 @@ import http from 'http';
 import path from 'path';
 import os from 'os'; // <--- FIXED: Import 'os' at the top level
 import { fileURLToPath } from 'url';
-import { textToSpeech, chat } from './ai-services.js'; 
+import { textToSpeech, chat, detectEmotion } from './ai-services.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +38,7 @@ const SERVER_IP = getServerIP();
 console.log(`📡 Server IP: ${SERVER_IP}:${PORT}`);
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/audio', express.static(path.join(__dirname, 'audio'))); // Serve TTS audio files
 app.use(express.json());
 
 let robotWs = null;
@@ -116,6 +117,7 @@ wss.on('connection', (ws, req) => {
                                     robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'happy' }));
                                     robotWs.send(JSON.stringify({ 
                                          type: 'play_audio', 
+                                         text: text,  // Send text for local TTS
                                          url: `http://${SERVER_IP}:${PORT}${audio.audioFile}`
                                     }));
                                     broadcast({ type: 'chat_response', text: text });
@@ -158,15 +160,31 @@ wss.on('connection', (ws, req) => {
                     const reply = await chat(msg.text);
                     const audio = await textToSpeech(reply);
                     
+                    // Detect emotion from reply and set appropriate expression
+                    const emotion = detectEmotion(reply);
+                    console.log(`🎭 Detected emotion: ${emotion}`);
+                    
                     // Reply to Web
                     ws.send(JSON.stringify({ type: 'chat_response', text: reply }));
                     
-                    // Command Robot to speak
+                    // Command Robot to speak with emotion
                     if (audio.audioFile) {
                         if (robotWs && robotWs.readyState === 1) {
-                            robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'speaking' }));
+                            // Set emotional expression based on response
+                            let expressionBehavior = 'happy'; // default
+                            switch(emotion) {
+                                case 'happy': expressionBehavior = 'happy'; break;
+                                case 'sad': expressionBehavior = 'sad'; break;
+                                case 'excited': expressionBehavior = 'excited'; break;
+                                case 'surprised': expressionBehavior = 'surprised'; break;
+                                case 'confused': expressionBehavior = 'confused'; break;
+                                default: expressionBehavior = 'happy';
+                            }
+                            
+                            robotWs.send(JSON.stringify({ type: 'set_behavior', name: expressionBehavior }));
                             robotWs.send(JSON.stringify({ 
                                 type: 'play_audio', 
+                                text: reply,  // Send text for local TTS
                                 url: `http://${SERVER_IP}:${PORT}${audio.audioFile}`
                             }));
                         }
@@ -182,13 +200,6 @@ wss.on('connection', (ws, req) => {
                 // Handle stopwatch commands
                 else if (msg.type === 'stopwatch_start' || msg.type === 'stopwatch_stop' || msg.type === 'stopwatch_reset') {
                     console.log(`⏱️ Stopwatch: ${msg.type}`);
-                    if (robotWs && robotWs.readyState === 1) {
-                        robotWs.send(JSON.stringify(msg));
-                    }
-                }
-                // Handle show time voice command
-                else if (msg.type === 'show_time') {
-                    console.log(`🕐 Show Time: voice command`);
                     if (robotWs && robotWs.readyState === 1) {
                         robotWs.send(JSON.stringify(msg));
                     }

@@ -34,19 +34,6 @@
         <div class="behavior-label" id="currentBehavior">calm_idle</div>
       </div>
       
-      <!-- Quick Behavior Buttons -->
-      <div class="quick-actions">
-        <h4>Quick Expressions</h4>
-        <div class="action-grid">
-          <button class="action-btn" data-behavior="happy" title="Happy">😊</button>
-          <button class="action-btn" data-behavior="curious_idle" title="Curious">🤔</button>
-          <button class="action-btn" data-behavior="sleepy_idle" title="Sleepy">😴</button>
-          <button class="action-btn" data-behavior="shy_happy" title="Shy">😳</button>
-          <button class="action-btn" data-behavior="startled" title="Startled">😲</button>
-          <button class="action-btn" data-behavior="playful_mischief" title="Mischief">😈</button>
-        </div>
-      </div>
-
       <!-- LED Color Control -->
       <div class="led-control">
         <h4>Mood Light</h4>
@@ -59,10 +46,6 @@
           <button class="led-btn" data-color="#00ffff" style="background:#00ffff" title="Cyan"></button>
           <button class="led-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
           <button class="led-btn led-off" data-color="off" title="Off">✕</button>
-        </div>
-        <!-- Show Time Button -->
-        <div style="margin-top: 10px;">
-          <button id="showTimeBtn" class="action-btn" title="Show Current Time">🕐 Show Time</button>
         </div>
       </div>
       
@@ -85,10 +68,6 @@
           <span class="info-label">✋ Touch</span>
           <span class="info-value" id="sensorTouch">—</span>
         </div>
-        <div class="info-item">
-          <span class="info-label">🎤 Sound</span>
-          <span class="info-value" id="sensorSound">—</span>
-        </div>
       </div>
       
       <!-- Demo Controls -->
@@ -104,6 +83,15 @@
             <button class="demo-btn" onclick="stopwatchStop()">⏸️ Stop</button>
             <button class="demo-btn" onclick="stopwatchReset()">🔄 Reset</button>
           </div>
+        </div>
+        
+        <!-- Audio Testing -->
+        <div class="demo-section">
+          <label>🔊 Audio System Test</label>
+          <div class="btn-row">
+            <button class="demo-btn" onclick="testAudio()">🎵 Test Audio</button>
+          </div>
+          <div class="audio-status" id="audioStatus" style="font-size: 12px; margin-top: 5px; color: #666;"></div>
         </div>
       </div>
     </section>

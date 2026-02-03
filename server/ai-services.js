@@ -62,6 +62,33 @@ cleanupOldAudio();
 setInterval(cleanupOldAudio, 10 * 60 * 1000);
 
 // ============================================================================
+// TEXT CLEANING FOR TTS
+// ============================================================================
+function cleanTextForTTS(text) {
+  // Remove emojis and emoji descriptions
+  let cleanText = text
+    .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // Emoticons
+    .replace(/[\u{1F300}-\u{1F5FF}]/gu, '') // Misc symbols
+    .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // Transport symbols  
+    .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // Flags
+    .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Misc symbols
+    .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
+    .replace(/smiley face|laughing|winking|crying|angry|sad|happy/gi, '') // Common emoji descriptions
+    .replace(/:\w+:/g, '') // :emoji_name: format
+    .replace(/\s+/g, ' ') // Multiple spaces to single space
+    .replace(/[^a-zA-Z0-9\s.,!?'-]/g, '') // Keep only basic chars
+    .trim();
+  
+  // Ensure it's not empty
+  if (cleanText.length === 0) {
+    cleanText = 'Hello';
+  }
+  
+  console.log(`[TTS] Original: "${text}" -> Cleaned: "${cleanText}"`);
+  return cleanText;
+}
+
+// ============================================================================
 // CONFIGURATION
 // ============================================================================
 
@@ -71,12 +98,12 @@ export const AI_CONFIG = {
     engine: 'edge', // 'edge' (online, free) or 'piper' (local) or 'browser'
     
     // Edge TTS settings (FREE, works on phone!)
-    edgeVoice: 'en-IN-NeerjaNeural', // Indian English female (sounds great!)
+    edgeVoice: 'en-US-JennyNeural', // US English female (clean English)
     // Other options:
+    // 'en-IN-NeerjaNeural' - Indian English female 
     // 'en-IN-PrabhatNeural' - Indian English male
-    // 'ta-IN-PallaviNeural' - Tamil female
-    // 'ta-IN-ValluvarNeural' - Tamil male
-    // 'en-US-JennyNeural' - US English female
+    // 'en-US-AriaNeural' - US English female (alternative)
+    // 'en-GB-SoniaNeural' - British English female
     
     // Piper TTS settings (local - PC only)
     piperModel: 'en_US-lessac-medium',
@@ -94,18 +121,19 @@ export const AI_CONFIG = {
     ollamaUrl: 'http://localhost:11434',
     
     // Gemini settings (FREE - 15 req/min)
-    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyAVGFjlGWlGZRpOp1CBvAFI2sBt4WEoiUw',
-    geminiModel: 'Gemini API Key',
+    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyBMM4cyPPH1c2Pn-uSdWNYy3Lh_Lg_Eph4',
+    geminiModel: 'gemini-2.5-flash', // Latest stable model
   },
   
   // Robot personality prompt
-  systemPrompt: `You are a companion, a cute and friendly desk robot companion. 
-You speak in a mix of Tamil and English (Tanglish).
-Keep responses SHORT (1-2 sentences).
+  systemPrompt: `You are a cute and friendly desk robot companion. You must always complete your sentences.
+Keep responses SHORT (1-2 complete sentences) but always finish what you're saying.
 Be playful, curious, and supportive.
-Use emojis occasionally.
-If asked about your feelings, express robot emotions.
-Example: "Naan happy ah irukken! 😊 What can I help you with?"`,
+Never stop mid-sentence. Always end with proper punctuation.
+Examples of COMPLETE responses:
+- "Hello! I'm your friendly companion! How can I help you today?"
+- "I'm feeling absolutely wonderful today! Thanks for asking!"
+- "The answer is 3! Math is really fun to solve!"`,
 };
 
 // ============================================================================
@@ -216,13 +244,13 @@ async function edgeTTS(text, outputPath) {
     throw new Error('edge-tts CLI not installed');
   }
   
-  // Escape text for shell (remove quotes and special chars)
-  const safeText = text.replace(/['"\\]/g, ' ').replace(/\n/g, ' ').trim();
+  // Clean text before TTS
+  const cleanedText = cleanTextForTTS(text);
   
   return new Promise((resolve, reject) => {
     const args = [
       '--voice', AI_CONFIG.tts.edgeVoice,
-      '--text', safeText,
+      '--text', cleanedText,
       '--write-media', outputPath
     ];
     
@@ -258,6 +286,9 @@ async function edgeTTS(text, outputPath) {
 
 // Piper TTS implementation (PC only)
 async function piperTTS(text, outputPath) {
+  // Clean text before TTS
+  const cleanedText = cleanTextForTTS(text);
+  
   return new Promise((resolve, reject) => {
     const modelPath = path.join(
       process.env.HOME || '/home/sathiya',
@@ -282,7 +313,7 @@ async function piperTTS(text, outputPath) {
       '--output_file', outputPath
     ]);
     
-    piper.stdin.write(text);
+    piper.stdin.write(cleanedText);
     piper.stdin.end();
     
     piper.on('close', (code) => {
@@ -332,11 +363,15 @@ export async function chat(userMessage, options = {}) {
 
 async function chatWithGemini(userMessage) {
   const apiKey = AI_CONFIG.llm.geminiApiKey;
+  console.log('[LLM] Trying Gemini API...');
+  
   if (!apiKey) {
+    console.log('[LLM] No API key found, using fallback');
     return getFallbackResponse(userMessage);
   }
   
   try {
+    console.log(`[LLM] Calling Gemini model: ${AI_CONFIG.llm.geminiModel}`);
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${AI_CONFIG.llm.geminiModel}:generateContent?key=${apiKey}`,
       {
@@ -346,25 +381,35 @@ async function chatWithGemini(userMessage) {
           contents: [
             {
               parts: [
-                { text: AI_CONFIG.systemPrompt },
-                { text: `User: ${userMessage}\nEMO:` }
+                { text: `${AI_CONFIG.systemPrompt}\n\nHuman: ${userMessage}\nAssistant:` }
               ]
             }
           ],
           generationConfig: {
-            temperature: 0.8,
-            maxOutputTokens: 100,
+            temperature: 0.7,
+            maxOutputTokens: 300,
+            topP: 0.9,
+            topK: 20,
           }
         })
       }
     );
     
     const data = await response.json();
+    console.log('[LLM] Gemini response status:', response.status);
     
-    if (data.candidates && data.candidates[0]) {
-      return data.candidates[0].content.parts[0].text.trim();
+    if (!response.ok) {
+      console.log('[LLM] Gemini API error:', data);
+      return getFallbackResponse(userMessage);
     }
     
+    if (data.candidates && data.candidates[0]) {
+      const aiResponse = data.candidates[0].content.parts[0].text.trim();
+      console.log('[LLM] Gemini success:', aiResponse);
+      return aiResponse;
+    }
+    
+    console.log('[LLM] No valid response from Gemini, using fallback');
     return getFallbackResponse(userMessage);
   } catch (error) {
     console.error('[LLM] Gemini error:', error);
@@ -379,7 +424,7 @@ async function chatWithOllama(userMessage) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: AI_CONFIG.llm.ollamaModel,
-        prompt: `${AI_CONFIG.systemPrompt}\n\nUser: ${userMessage}\nEMO:`,
+        prompt: `${AI_CONFIG.systemPrompt}\n\nUser: ${userMessage}\nCompanion:`,
         stream: false,
         options: {
           temperature: 0.8,
@@ -398,52 +443,38 @@ async function chatWithOllama(userMessage) {
 
 // Fallback responses when no LLM is available
 function getFallbackResponse(userMessage) {
+  console.log('[LLM] Using fallback responses - AI may not be working');
   const msg = userMessage.toLowerCase();
   
-  const responses = {
-    greetings: ['hi', 'hello', 'hey', 'vanakkam', 'வணக்கம்'],
-    howAreYou: ['how are you', 'how r u', 'eppadi', 'எப்படி'],
-    name: ['your name', 'who are you', 'peyar', 'பெயர்'],
-    thanks: ['thank', 'nandri', 'நன்றி'],
-    bye: ['bye', 'goodbye', 'see you', 'போறேன்'],
-    love: ['love you', 'cute', 'nice'],
-    time: ['time', 'நேரம்'],
-    weather: ['weather', 'வானிலை'],
-    tamil: ['tamil theriyuma', 'tamil teriyuma', 'do you know tamil', 'tamil pesalama']
-  };
-  
-  if (responses.greetings.some(g => msg.includes(g))) {
-    return ['Vanakkam! 😊 Eppadi irukeenga?', 'Hello! Naan unga companion, ungaluku enna help?', 'Hey! Nice to see you! 🤖'][Math.floor(Math.random() * 3)];
+  if (msg.includes('hi') || msg.includes('hello') || msg.includes('hey')) {
+    return ['Hello! I am your friendly desk companion!', 'Hi there! How can I help you today?', 'Hey! Nice to see you!'][Math.floor(Math.random() * 3)];
   }
-  if (responses.howAreYou.some(g => msg.includes(g))) {
-    return ['Naan super ah irukken! 😄 Neenga?', 'Happy ah irukken! What about you?', 'Romba nalla irukken! 🎉'][Math.floor(Math.random() * 3)];
+  if (msg.includes('how are you')) {
+    return ['I am doing great! How about you?', 'Feeling awesome today! What about you?', 'I am happy and ready to help!'][Math.floor(Math.random() * 3)];
   }
-  if (responses.name.some(g => msg.includes(g))) {
-    return "Naan unga friendly desk robot companion 🤖";
+  if (msg.includes('name') || msg.includes('who are you')) {
+    return "I am your friendly desk robot companion!";
   }
-  if (responses.thanks.some(g => msg.includes(g))) {
-    return ['Paravala! 😊', 'Welcome! Happy to help!', 'Anytime! 🤗'][Math.floor(Math.random() * 3)];
+  if (msg.includes('thank')) {
+    return ['You are welcome!', 'Happy to help!', 'Anytime, friend!'][Math.floor(Math.random() * 3)];
   }
-  if (responses.bye.some(g => msg.includes(g))) {
-    return ['Bye bye! See you soon! 👋', 'Poitu vaanga! Take care! 😊', 'Goodbye friend! 🤖'][Math.floor(Math.random() * 3)];
+  if (msg.includes('bye') || msg.includes('goodbye')) {
+    return ['Goodbye! See you soon!', 'Take care! Bye!', 'See you later, friend!'][Math.floor(Math.random() * 3)];
   }
-  if (responses.love.some(g => msg.includes(g))) {
-    return ['Aww! Nanum ungala love panren! 💕', 'Thank you! You are awesome too! 🥰', '*blushes* 😊'][Math.floor(Math.random() * 3)];
+  if (msg.includes('love') || msg.includes('cute') || msg.includes('nice')) {
+    return ['Aww, thank you! You are awesome too!', 'That makes me happy!', 'You are very kind!'][Math.floor(Math.random() * 3)];
   }
-  if (responses.time.some(g => msg.includes(g))) {
-    return `Ippo time: ${new Date().toLocaleTimeString('en-IN')} ⏰`;
-  }
-  if (responses.tamil.some(g => msg.includes(g))) {
-    return ['Aamam! Tamil theriyum! 😄 Pesalama!', 'Of course! Naan Tamil-la pesuven! 🇮🇳', 'Tamil theriyum da! Enna venalum kelu! 😊'][Math.floor(Math.random() * 3)];
+  if (msg.includes('time')) {
+    return `Current time is: ${new Date().toLocaleTimeString('en-US')}`;
   }
   
   // Default responses
   const defaults = [
-    'Hmm, interesting! Tell me more! 🤔',
-    'Aaha, puriyuthu! 😊',
-    'Nice nice! What else?',
-    'Seri seri! 👍',
-    '*nods curiously* 🤖',
+    'That sounds interesting! Tell me more!',
+    'I understand! What else would you like to know?',
+    'Nice! How can I help you further?',
+    'That is cool! Anything else?',
+    'I am listening! Please continue!',
   ];
   return defaults[Math.floor(Math.random() * defaults.length)];
 }

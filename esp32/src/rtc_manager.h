@@ -110,12 +110,4 @@ public:
     int minutes = (uptime / 60) % 60;
     Serial.printf("[RTC] Current time: %02d:%02d (uptime)\n", hours, minutes);
   }
-  
-  // Get current time components for display
-  void getCurrentTime(int& hours, int& minutes, int& seconds) {
-    unsigned long uptime = millis() / 1000;
-    hours = (uptime / 3600) % 24;
-    minutes = (uptime / 60) % 60;
-    seconds = uptime % 60;
-  }
 };

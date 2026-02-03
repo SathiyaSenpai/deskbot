@@ -341,22 +341,20 @@ function updateSensors(data) {
   
   const sensorLight = document.getElementById('sensorLight');
   const sensorMotion = document.getElementById('sensorMotion');
-  const sensorSound = document.getElementById('sensorSound');
   
   // Use readable text for light
   if (sensorLight) {
     const light = data.light || 0;
     if (light > 2000) {
-      sensorLight.innerText = 'Bright';
+      sensorLight.innerText = 'Dark';
     } else if (light > 1000) {
       sensorLight.innerText = 'Dim';
     } else {
-      sensorLight.innerText = 'Dark';
+      sensorLight.innerText = 'Bright';
     }
   }
   
   if (sensorMotion) sensorMotion.innerText = data.motion ? 'Yes' : 'No';
-  if (sensorSound) sensorSound.innerText = (data.soundLevel || 0) + '%';
 }
 
 function addMessage(text, type) {
@@ -471,21 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const confidence = event.results[0][0].confidence;
       console.log(`[MIC] Recognized: "${transcript}" (confidence: ${(confidence * 100).toFixed(1)}%)`);
       
-      // Check for voice commands first
-      const lowerTranscript = transcript.toLowerCase().trim();
-      
-      // "Show time" command - display current time on ESP32
-      if (lowerTranscript.includes('show time') || lowerTranscript.includes('what time') || 
-          lowerTranscript.includes('current time') || lowerTranscript.includes('the time')) {
-        console.log('[VOICE CMD] Show time command detected');
-        if (state.ws && state.isConnected) {
-          state.ws.send(JSON.stringify({ type: 'show_time' }));
-          addMessage('🕐 Showing current time...', 'system');
-        }
-        return; // Don't send to AI chat
-      }
-      
-      // Send to chat (if not a command)
+      // Send to chat
       if (transcript.trim()) {
         addMessage(transcript, 'user');
         if (state.ws && state.isConnected) {
@@ -560,25 +544,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.action-btn').forEach(btn => {
     btn.onclick = () => {
       const behavior = btn.getAttribute('data-behavior');
-      if (behavior) {
-        triggerBehavior(behavior);
-      }
+      triggerBehavior(behavior);
     };
   });
-  
-  // Show Time button
-  const showTimeBtn = document.getElementById('showTimeBtn');
-  if (showTimeBtn) {
-    showTimeBtn.onclick = () => {
-      console.log('[DEBUG] Show Time button clicked');
-      if (state.ws && state.isConnected) {
-        state.ws.send(JSON.stringify({ type: 'show_time' }));
-        addMessage('🕐 Showing current time...', 'system');
-      } else {
-        console.log('[DEBUG] WebSocket not connected');
-      }
-    };
-  }
 });
 
 // ==============================================
@@ -641,4 +609,32 @@ function updateStopwatchDisplay() {
   const centiseconds = Math.floor((totalTime % 1000) / 10);
   
   display.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+}
+
+// ==============================================
+// Audio Testing Function
+// ==============================================
+
+function testAudio() {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ type: 'test_audio' }));
+    
+    // Update local status
+    const status = document.getElementById('audioStatus');
+    if (status) {
+      status.textContent = 'Testing audio systems...';
+      status.style.color = '#007acc';
+      
+      // Clear status after test duration
+      setTimeout(() => {
+        status.textContent = 'Test completed';
+        status.style.color = '#666';
+        setTimeout(() => {
+          status.textContent = '';
+        }, 3000);
+      }, 8000); // 8 seconds for full test
+    }
+  } else {
+    alert('Not connected to DeskBot');
+  }
 }

@@ -212,56 +212,6 @@ void startBehavior(const char* name) {
 bool webBehaviorActive = false;
 unsigned long webBehaviorTime = 0;
 
-void handleMessage(const char* type, JsonDocument& doc) {
-  if (strcmp(type, "set_behavior") == 0) {
-    webBehaviorActive = true;
-    webBehaviorTime = millis();
-    startBehavior(doc["name"], millis()); // FIXED: Use millis() instead of wrapper
-  }
-  else if (strcmp(type, "servo_action") == 0) {
-    servo.setTarget(doc["angle"], 3000); // Auto-return after 3s
-    lastInteractionTime = millis();
-  }
-  else if (strcmp(type, "led_action") == 0) {
-    // Handle LED color commands from web UI - supports hex colors
-    const char* color = doc["color"];
-    if (color) {
-      Serial.printf("[LED] Web command: %s\n", color);
-      
-      if (strcmp(color, "off") == 0) {
-        leds.setMood("sleeping");
-      } 
-      else if (strcmp(color, "#ff0000") == 0) leds.setMood("red");
-      else if (strcmp(color, "#00ff00") == 0) leds.setMood("green");
-      else if (strcmp(color, "#0000ff") == 0) leds.setMood("blue");
-      else if (strcmp(color, "#ffff00") == 0) leds.setMood("happy");
-      else if (strcmp(color, "#ff00ff") == 0) leds.setMood("purple");
-      else if (strcmp(color, "#00ffff") == 0) leds.setMood("cyan");
-      else if (strcmp(color, "#ffffff") == 0) leds.setMood("surprised");
-      else leds.setMood(color);
-    }
-    lastInteractionTime = millis();
-  }
-  else if (strcmp(type, "play_audio") == 0) {
-    startBehavior("listening");
-    audioMgr.playFromURLAsync(doc["url"]);
-  }
-  else if (strcmp(type, "request_state") == 0) {
-    if (activeBehavior && robotWs.isConnected()) {
-      robotWs.sendStatus("sync_behavior", activeBehavior->name);
-    }
-  }
-  // ============= STOPWATCH COMMANDS =============
-  else if (strcmp(type, "stopwatch_start") == 0) {
-    rtcMgr.stopwatchStart();
-  }
-  else if (strcmp(type, "stopwatch_stop") == 0) {
-    rtcMgr.stopwatchStop();
-  }
-  else if (strcmp(type, "stopwatch_reset") == 0) {
-    rtcMgr.stopwatchReset();
-  }
-}
 
 // --- SETUP ---
 void setup() {
@@ -286,7 +236,6 @@ void setup() {
   if (wifiMgr.autoConnect()) {
       audioMgr.begin();
       robotWs.setServer(wifiMgr.getServerIP().c_str(), wifiMgr.getServerPort());
-      robotWs.setCallback(handleMessage);
       robotWs.begin();
   }
   
@@ -305,7 +254,67 @@ void loop() {
   // 1. Critical Loops
   if (WiFi.status() == WL_CONNECTED) {
     robotWs.loop();
-    audioMgr.loop();
+    audioMgr.update();
+    
+    // Process WebSocket messages from queue
+    WsQueueMessage wsMsg;
+    while (robotWs.getMessage(wsMsg)) {
+      switch (wsMsg.type) {
+        case WS_MSG_SET_BEHAVIOR:
+          webBehaviorActive = true;
+          webBehaviorTime = millis();
+          startBehavior(wsMsg.data, millis());
+          break;
+          
+        case WS_MSG_SERVO_ACTION:
+          servo.setTarget(wsMsg.intValue, 3000);
+          lastInteractionTime = millis();
+          break;
+          
+        case WS_MSG_LED_ACTION:
+          {
+            const char* color = wsMsg.data;
+            Serial.printf("[LED] Web command: %s\n", color);
+            if (strcmp(color, "off") == 0) leds.setMood("sleeping");
+            else if (strcmp(color, "#ff0000") == 0) leds.setMood("red");
+            else if (strcmp(color, "#00ff00") == 0) leds.setMood("green");
+            else if (strcmp(color, "#0000ff") == 0) leds.setMood("blue");
+            else if (strcmp(color, "#ffff00") == 0) leds.setMood("happy");
+            else if (strcmp(color, "#ff00ff") == 0) leds.setMood("purple");
+            else if (strcmp(color, "#00ffff") == 0) leds.setMood("cyan");
+            else if (strcmp(color, "#ffffff") == 0) leds.setMood("surprised");
+            else leds.setMood(color);
+          }
+          lastInteractionTime = millis();
+          break;
+          
+        case WS_MSG_PLAY_AUDIO:
+          startBehavior("listening");
+          audioMgr.playURL(wsMsg.data);
+          break;
+          
+        case WS_MSG_REQUEST_STATE:
+          if (activeBehavior && robotWs.isConnected()) {
+            robotWs.sendStatus("sync_behavior", activeBehavior->name);
+          }
+          break;
+          
+        case WS_MSG_STOPWATCH_START:
+          rtcMgr.stopwatchStart();
+          break;
+          
+        case WS_MSG_STOPWATCH_STOP:
+          rtcMgr.stopwatchStop();
+          break;
+          
+        case WS_MSG_STOPWATCH_RESET:
+          rtcMgr.stopwatchReset();
+          break;
+          
+        default:
+          break;
+      }
+    }
   } else {
     wifiMgr.handlePortal();
   }

@@ -471,7 +471,21 @@ document.addEventListener('DOMContentLoaded', () => {
       const confidence = event.results[0][0].confidence;
       console.log(`[MIC] Recognized: "${transcript}" (confidence: ${(confidence * 100).toFixed(1)}%)`);
       
-      // Send to chat
+      // Check for voice commands first
+      const lowerTranscript = transcript.toLowerCase().trim();
+      
+      // "Show time" command - display current time on ESP32
+      if (lowerTranscript.includes('show time') || lowerTranscript.includes('what time') || 
+          lowerTranscript.includes('current time') || lowerTranscript.includes('the time')) {
+        console.log('[VOICE CMD] Show time command detected');
+        if (state.ws && state.isConnected) {
+          state.ws.send(JSON.stringify({ type: 'show_time' }));
+          addMessage('🕐 Showing current time...', 'system');
+        }
+        return; // Don't send to AI chat
+      }
+      
+      // Send to chat (if not a command)
       if (transcript.trim()) {
         addMessage(transcript, 'user');
         if (state.ws && state.isConnected) {

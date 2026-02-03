@@ -481,6 +481,11 @@ private:
   int stopwatchSec_ = 0;
   int stopwatchCentis_ = 0;
   
+  // Time display state
+  bool timeDisplayMode_ = false;
+  unsigned long timeDisplayStart_ = 0;
+  static const unsigned long TIME_DISPLAY_DURATION = 5000; // Show time for 5 seconds
+  
 public:
   // NEW PUBLIC METHODS FOR STOPWATCH
   
@@ -496,11 +501,28 @@ public:
     stopwatchMode_ = false;
   }
   
+  // Time display mode (shows current time for a few seconds)
+  void showTimeDisplay(bool show) {
+    if (show) {
+      timeDisplayMode_ = true;
+      timeDisplayStart_ = millis();
+    } else {
+      timeDisplayMode_ = false;
+    }
+  }
+  
   void render() {
     display_.clearBuffer();
     
-    // Special mode: Stopwatch display (no eyes)
-    if (stopwatchMode_) {
+    // Auto-hide time display after duration
+    if (timeDisplayMode_ && (millis() - timeDisplayStart_ > TIME_DISPLAY_DURATION)) {
+      timeDisplayMode_ = false;
+    }
+    
+    // Priority: Time Display > Stopwatch > Eyes
+    if (timeDisplayMode_) {
+      renderTimeDisplay();
+    } else if (stopwatchMode_) {
       renderStopwatch();
     } else {
       renderEyes();
@@ -528,6 +550,32 @@ private:
     
     // Label at top
     display_.drawStr(40, 12, "STOPWATCH");
+  }
+  
+  void renderTimeDisplay() {
+    // Get current time (using uptime as demo - real RTC would be better)
+    unsigned long uptime = millis() / 1000;
+    int hours = (uptime / 3600) % 24;
+    int minutes = (uptime / 60) % 60;
+    int seconds = uptime % 60;
+    
+    display_.setFont(u8g2_font_logisoso28_tn); // Large numeric font
+    
+    char timeStr[12];
+    snprintf(timeStr, sizeof(timeStr), "%02d:%02d", hours, minutes);
+    
+    // Center the time display
+    int strWidth = display_.getStrWidth(timeStr);
+    int x = (128 - strWidth) / 2;
+    display_.drawStr(x, 42, timeStr);
+    
+    // Smaller seconds below
+    display_.setFont(u8g2_font_6x10_tr);
+    snprintf(timeStr, sizeof(timeStr), ":%02d", seconds);
+    display_.drawStr(x + strWidth + 2, 42, timeStr);
+    
+    // Label at top
+    display_.drawStr(35, 12, "CURRENT TIME");
   }
   
   void renderEyes() {

@@ -186,6 +186,13 @@ wss.on('connection', (ws, req) => {
                         robotWs.send(JSON.stringify(msg));
                     }
                 }
+                // Handle show time voice command
+                else if (msg.type === 'show_time') {
+                    console.log(`🕐 Show Time: voice command`);
+                    if (robotWs && robotWs.readyState === 1) {
+                        robotWs.send(JSON.stringify(msg));
+                    }
+                }
                 // Forward Buttons (set_behavior, etc.) - also broadcast to other web clients
                 else if (robotWs && robotWs.readyState === 1) {
                     robotWs.send(JSON.stringify(msg));

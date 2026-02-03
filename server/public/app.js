@@ -560,9 +560,25 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.action-btn').forEach(btn => {
     btn.onclick = () => {
       const behavior = btn.getAttribute('data-behavior');
-      triggerBehavior(behavior);
+      if (behavior) {
+        triggerBehavior(behavior);
+      }
     };
   });
+  
+  // Show Time button
+  const showTimeBtn = document.getElementById('showTimeBtn');
+  if (showTimeBtn) {
+    showTimeBtn.onclick = () => {
+      console.log('[DEBUG] Show Time button clicked');
+      if (state.ws && state.isConnected) {
+        state.ws.send(JSON.stringify({ type: 'show_time' }));
+        addMessage('🕐 Showing current time...', 'system');
+      } else {
+        console.log('[DEBUG] WebSocket not connected');
+      }
+    };
+  }
 });
 
 // ==============================================

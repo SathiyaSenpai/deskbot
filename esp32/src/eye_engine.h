@@ -556,6 +556,13 @@ private:
   }
   
   void renderTimeDisplay() {
+    // Debug: Confirm renderTimeDisplay is being called
+    static bool debugPrinted = false;
+    if (!debugPrinted) {
+      Serial.println("[EYE] renderTimeDisplay() called");
+      debugPrinted = true;
+    }
+    
     // Get current time (using uptime as demo - real RTC would be better)
     unsigned long uptime = millis() / 1000;
     int hours = (uptime / 3600) % 24;

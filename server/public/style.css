@@ -156,7 +156,8 @@ body {
   gap: 16px;
   padding: 16px;
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;

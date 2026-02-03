@@ -506,8 +506,10 @@ public:
     if (show) {
       timeDisplayMode_ = true;
       timeDisplayStart_ = millis();
+      Serial.println("[EYE] Time display mode ENABLED");
     } else {
       timeDisplayMode_ = false;
+      Serial.println("[EYE] Time display mode DISABLED");
     }
   }
   
@@ -517,6 +519,7 @@ public:
     // Auto-hide time display after duration
     if (timeDisplayMode_ && (millis() - timeDisplayStart_ > TIME_DISPLAY_DURATION)) {
       timeDisplayMode_ = false;
+      Serial.println("[EYE] Time display auto-hidden");
     }
     
     // Priority: Time Display > Stopwatch > Eyes

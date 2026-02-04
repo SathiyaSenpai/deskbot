@@ -32,10 +32,11 @@ public:
     testUltrasonicConnection();
   }
 
-  void update() {
+  void update(bool skipUltrasonic = false) {
     // Update distance reading every 200ms (throttled)
+    // SLEEP FIX: Skip ultrasonic reads during sleep to prevent micro-freezes
     static unsigned long lastDistanceRead = 0;
-    if (millis() - lastDistanceRead > 200) {
+    if (!skipUltrasonic && millis() - lastDistanceRead > 200) {
       lastDistanceRead = millis();
       lastDistance_ = readDistanceSimple();
     }

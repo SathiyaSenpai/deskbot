@@ -192,9 +192,10 @@ public:
       targetSaccadeY_ = 0;
     }
     
-    // Debug output every second
+    // Debug output every 5 seconds (reduced during sleep to prevent overhead)
     static unsigned long lastDebug = 0;
-    if (millis() - lastDebug > 1000) {
+    unsigned long debugInterval = (activeEffect_ == EFFECT_ZZZ) ? 5000 : 1000; // Less frequent during sleep
+    if (millis() - lastDebug > debugInterval) {
       Serial.printf("[EYE] Current: w=%.1f h=%.1f topLid=%.2f/%.2f botLid=%.2f/%.2f blink=%.2f effect=%d\n",
                     currentWidth_, currentHeight_, 
                     topLid_, targetTopLid_,
@@ -352,23 +353,23 @@ private:
 
     switch (activeEffect_) {
       case EFFECT_ZZZ: {
-        // FIXED: Start Y at 10 (Above the eye) instead of 40 (Center of eye)
-        // calculated as: StartY - (Time * Speed)
+        // SLEEP FIX: Pre-calculate to avoid fmod() overhead causing micro-freezes
+        // Use integer math where possible
+        int cycleMs = ((int)(effectTimer_ * 1000)) % 3000; // 3 second cycle
         
-        // Z1
-        float t1 = fmod(effectTimer_, 3.0f);
-        float y1 = 20.0f - (t1 * 8.0f);   // Float up from 19 to 11
-        if (y1 > -5) display_.drawStr(cx + 8, (int)y1, "z");
+        // Z1 - cycles 0-3000ms
+        int y1 = 20 - (cycleMs * 8 / 1000);
+        if (y1 > -5 && y1 < 64) display_.drawStr(cx + 8, y1, "z");
 
-        // Z2 (Offset 1s)
-        float t2 = fmod(effectTimer_ + 1.0f, 3.0f);
-        float y2 = 20.0f - (t2 * 8.0f);
-        if (y2 > -5) display_.drawStr(cx + 16, (int)y2, "Z");
+        // Z2 - offset by 1000ms
+        int t2 = (cycleMs + 1000) % 3000;
+        int y2 = 20 - (t2 * 8 / 1000);
+        if (y2 > -5 && y2 < 64) display_.drawStr(cx + 16, y2, "Z");
 
-        // Z3 (Offset 2s)
-        float t3 = fmod(effectTimer_ + 2.0f, 3.0f);
-        float y3 = 20.0f - (t3 * 8.0f);
-        if (y3 > -5) display_.drawStr(cx + 24, (int)y3, "z");
+        // Z3 - offset by 2000ms
+        int t3 = (cycleMs + 2000) % 3000;
+        int y3 = 20 - (t3 * 8 / 1000);
+        if (y3 > -5 && y3 < 64) display_.drawStr(cx + 24, y3, "z");
         break;
       }
       

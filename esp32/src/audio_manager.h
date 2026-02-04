@@ -21,10 +21,15 @@ private:
     bool isPlaying;
     bool isInitialized;
     String currentUrl;
+    unsigned long lastUpdateTime;
+    unsigned long playbackStartTime;
+    static const unsigned long UPDATE_INTERVAL = 5; // Process audio every 5ms max
+    static const unsigned long MAX_PLAYBACK_TIME = 60000; // 60 second max playback
 
 public:
     AudioManager() : mp3(nullptr), audioSource(nullptr), audioBuffer(nullptr), 
-                     audioOutput(nullptr), isPlaying(false), isInitialized(false) {}
+                     audioOutput(nullptr), isPlaying(false), isInitialized(false),
+                     lastUpdateTime(0), playbackStartTime(0) {}
 
     void begin() {
         if (isInitialized) return;
@@ -51,17 +56,20 @@ public:
         
         Serial.println("[AUDIO] Playing URL: " + url);
         currentUrl = url;
+        lastUpdateTime = millis();
         
         try {
             // Create HTTP stream source
             audioSource = new AudioFileSourceHTTPStream(url.c_str());
             
-            // Add buffer for smooth playback (larger buffer for better streaming)
-            audioBuffer = new AudioFileSourceBuffer(audioSource, 4096);
+            // FREEZE FIX: Smaller buffer (2048 instead of 4096) for faster response
+            // Trades some audio smoothness for better system responsiveness
+            audioBuffer = new AudioFileSourceBuffer(audioSource, 2048);
             
             // Start MP3 generation
             if (mp3->begin(audioBuffer, audioOutput)) {
                 isPlaying = true;
+                playbackStartTime = millis();
                 Serial.println("[AUDIO] MP3 playback started successfully");
             } else {
                 Serial.println("[AUDIO] Failed to start MP3 playback");
@@ -74,12 +82,30 @@ public:
     }
 
     void update() {
-        if (isPlaying && mp3 && mp3->isRunning()) {
-            if (!mp3->loop()) {
-                Serial.println("[AUDIO] Playback finished");
-                stop();
-            }
+        if (!isPlaying || !mp3 || !mp3->isRunning()) return;
+        
+        unsigned long now = millis();
+        
+        // FREEZE FIX: Safety timeout - stop if playing too long (stuck)
+        if (now - playbackStartTime > MAX_PLAYBACK_TIME) {
+            Serial.println("[AUDIO] Playback timeout - stopping");
+            stop();
+            return;
         }
+        
+        // FREEZE FIX: Throttle audio processing to prevent blocking main loop
+        if (now - lastUpdateTime < UPDATE_INTERVAL) return;
+        lastUpdateTime = now;
+        
+        // Process audio in small chunks - yield control back quickly
+        // The loop() call decodes and plays a chunk of audio
+        if (!mp3->loop()) {
+            Serial.println("[AUDIO] Playback finished");
+            stop();
+        }
+        
+        // Additional yield to prevent watchdog timeout
+        yield();
     }
 
     void stop() {

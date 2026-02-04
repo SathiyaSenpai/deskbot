@@ -152,8 +152,9 @@ wss.on('connection', (ws, req) => {
                 else if (msg.type === 'chat_message') {
                     console.log(`💬 User: ${msg.text}`);
                     
-                    // Set thinking behavior while processing
+                    // Wake up robot from sleep if needed
                     if (robotWs && robotWs.readyState === 1) {
+                        robotWs.send(JSON.stringify({ type: 'wake_up' }));
                         robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'thinking' }));
                     }
                     
@@ -186,6 +187,12 @@ wss.on('connection', (ws, req) => {
                                 type: 'play_audio', 
                                 text: reply,  // Send text for local TTS
                                 url: `http://${SERVER_IP}:${PORT}${audio.audioFile}`
+                            }));
+                            
+                            // Keep robot awake for 25 seconds with random movements
+                            robotWs.send(JSON.stringify({ 
+                                type: 'stay_awake', 
+                                duration: 25000 // 25 seconds in milliseconds
                             }));
                         }
                     }

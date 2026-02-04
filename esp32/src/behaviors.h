@@ -53,6 +53,10 @@ static const Behavior BEHAVIORS[] = {
   {"startled",        1.3f, 0.85f, 0.0f, 0.0f, 0, -4,   100, 1500, 300,  "surprised"},
   {"playful_mischief", 1.0f, 1.0f, 0.0f, 0.3f, 6, 0,   300, 3000, 400,  "happy"},
   
+  // --- WAKE UP BEHAVIORS ---
+  {"wake_up",         1.1f, 1.0f, 0.0f, 0.0f, 0, -2,   300, 2000, 400,  "cyan"},
+  {"random_movement", 1.0f, 1.0f, 0.1f, 0.0f, 0, 0,    200, 25000, 300, "happy"},
+  
   {nullptr, 0,0,0,0,0,0, 0,0,0, nullptr}
 };
 

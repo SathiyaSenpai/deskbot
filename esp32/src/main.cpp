@@ -21,6 +21,7 @@
 #include "rtc_manager.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
+#include "esp_task_wdt.h"
 
 // --- OBJECTS ---
 U8G2_SH1106_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
@@ -114,6 +115,15 @@ bool inSleepMode = false;
 bool inDarkSleepMode = false;
 
 const unsigned long IDLE_TO_SLEEPY_DELAY = 20000;
+
+// --- CROWD-PROOF SETTINGS FOR INTERNATIONAL EVENT ---
+const bool PRESENTATION_MODE = true;  // Disable sleep, optimize for crowds
+const int TOUCH_THRESHOLD = 35;       // Less sensitive (default: 25)
+const unsigned long MOTION_COOLDOWN = 3000;   // 3 sec motion cooldown
+const int DISTANCE_MIN = 180;         // Ignore very close readings (cm)
+const int DISTANCE_MAX = 350;         // Shorter range in crowds
+const int VOLUME_THRESHOLD_HIGH = 50; // Less sensitive to crowd noise
+const int VOLUME_THRESHOLD_LOW = 25;  // Higher threshold for listening
 
 // --- BEHAVIOR CONTROLLER ---
 // FIXED: Accepts 'now' to prevent timing mismatch
@@ -212,6 +222,133 @@ void startBehavior(const char* name) {
 bool webBehaviorActive = false;
 unsigned long webBehaviorTime = 0;
 
+void handleMessage(const char* type, JsonDocument& doc) {
+  if (strcmp(type, "set_behavior") == 0) {
+    webBehaviorActive = true;
+    webBehaviorTime = millis();
+    startBehavior(doc["name"], millis()); // FIXED: Use millis() instead of wrapper
+  }
+  else if (strcmp(type, "servo_action") == 0) {
+    servo.setTarget(doc["angle"], 3000); // Auto-return after 3s
+    lastInteractionTime = millis();
+  }
+  else if (strcmp(type, "led_action") == 0) {
+    // Handle LED color commands from web UI - supports hex colors
+    const char* color = doc["color"];
+    if (color) {
+      Serial.printf("[LED] Web command: %s\n", color);
+      
+      if (strcmp(color, "off") == 0) {
+        leds.setMood("sleeping");
+      } 
+      else if (strcmp(color, "#ff0000") == 0) leds.setMood("red");
+      else if (strcmp(color, "#00ff00") == 0) leds.setMood("green");
+      else if (strcmp(color, "#0000ff") == 0) leds.setMood("blue");
+      else if (strcmp(color, "#ffff00") == 0) leds.setMood("happy");
+      else if (strcmp(color, "#ff00ff") == 0) leds.setMood("purple");
+      else if (strcmp(color, "#00ffff") == 0) leds.setMood("cyan");
+      else if (strcmp(color, "#ffffff") == 0) leds.setMood("surprised");
+      else leds.setMood(color);
+    }
+    lastInteractionTime = millis();
+  }
+  else if (strcmp(type, "play_audio") == 0) {
+    startBehavior("listening");
+    
+    // Check if there's text to speak
+    if (doc.containsKey("text")) {
+      const char* text = doc["text"];
+      Serial.printf("[AUDIO] Speaking text: %s\n", text);
+      audioMgr.speakText(text);
+    } else if (doc.containsKey("url")) {
+      // Play audio from URL
+      audioMgr.playURL(doc["url"]);
+    }
+  }
+  else if (strcmp(type, "request_state") == 0) {
+    if (activeBehavior && robotWs.isConnected()) {
+      robotWs.sendStatus("sync_behavior", activeBehavior->name);
+    }
+  }
+  // ============= STOPWATCH COMMANDS =============
+  else if (strcmp(type, "stopwatch_start") == 0) {
+    rtcMgr.stopwatchStart();
+  }
+  else if (strcmp(type, "stopwatch_stop") == 0) {
+    rtcMgr.stopwatchStop();
+  }
+  else if (strcmp(type, "stopwatch_reset") == 0) {
+    rtcMgr.stopwatchReset();
+  }
+  // ============= AUDIO TEST COMMAND =============
+  else if (strcmp(type, "test_audio") == 0) {
+    Serial.println("[AUDIO] Starting audio system test...");
+    startBehavior("listening"); // Visual feedback
+    testAudioSystems();
+    lastInteractionTime = millis();
+  }
+  // ============= WAKE UP COMMANDS =============
+  else if (strcmp(type, "wake_up") == 0) {
+    Serial.println("[WAKE] Wake up command received");
+    // Force the robot out of sleep state
+    isSleeping = false;
+    lastInteractionTime = millis();
+    
+    // Show appropriate expression based on the wake-up reason
+    if (doc.containsKey("expression")) {
+      const char* expression = doc["expression"];
+      Serial.printf("[WAKE] Setting expression: %s\n", expression);
+      startBehavior(expression);
+    } else {
+      // Default wake-up behavior
+      startBehavior("wake_up");
+    }
+  }
+  else if (strcmp(type, "stay_awake") == 0) {
+    Serial.println("[WAKE] Stay awake command received");
+    // Keep the robot active for specified duration
+    unsigned long duration = 25000; // Default 25 seconds
+    if (doc.containsKey("duration")) {
+      duration = doc["duration"];
+    }
+    
+    Serial.printf("[WAKE] Staying awake for %lu ms\n", duration);
+    lastInteractionTime = millis();
+    isSleeping = false;
+    
+    // Start random movement behavior
+    startBehavior("random_movement");
+  }
+}
+
+// --- AUDIO TESTING FUNCTION ---
+void testAudioSystems() {
+  Serial.println("\n=== AUDIO SYSTEM TEST START ===");
+  
+  // Test 1: Buzzer Sound Sequence
+  Serial.println("[TEST 1] Testing buzzer on PIN 19...");
+  for (int i = 0; i < 3; i++) {
+    tone(PIN_BUZZER, 1000 + (i * 200), 300);
+    delay(400);
+    noTone(PIN_BUZZER);
+    delay(100);
+  }
+  
+  // Test 2: I2S Speaker streaming
+  Serial.println("[TEST 2] Testing I2S speaker (streaming)...");
+  if (WiFi.status() == WL_CONNECTED) {
+    // Play a short test audio from internet
+    audioMgr.testAudio();
+    Serial.println("[TEST 2] Streaming test audio...");
+  } else {
+    Serial.println("[TEST 2] No WiFi - skipping stream test");
+  }
+  
+  Serial.println("=== AUDIO SYSTEM TEST COMPLETE ===\n");
+  
+  delay(500);
+  startBehavior("calm_idle");
+}
 
 // --- SETUP ---
 void setup() {
@@ -234,8 +371,11 @@ void setup() {
   Serial.println("[INIT] WiFi...");
   wifiMgr.begin();
   if (wifiMgr.autoConnect()) {
+      // Initialize I2S Audio
       audioMgr.begin();
+      
       robotWs.setServer(wifiMgr.getServerIP().c_str(), wifiMgr.getServerPort());
+      robotWs.setCallback(handleMessage);
       robotWs.begin();
   }
   
@@ -243,78 +383,31 @@ void setup() {
   startBehavior("calm_idle");
   lastInteractionTime = millis();
   lastIdleCheckTime = millis();
+  
+  // Disable default WDT and use manual feeding during sleep
+  esp_task_wdt_init(30, false); // 30 second timeout, don't panic on timeout
 }
 
 void loop() {
   static unsigned long lastTime = 0;
+  static unsigned long lastWiFiCheck = 0;
   unsigned long now = millis();
   float dt = (now - lastTime) / 1000.0f;
   lastTime = now;
+
+  // RESTART FIX: Periodic WiFi health check to prevent silent disconnection
+  if (now - lastWiFiCheck > 30000) { // Every 30 seconds
+    lastWiFiCheck = now;
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("[WIFI] Connection lost, reconnecting...");
+      WiFi.reconnect();
+    }
+  }
 
   // 1. Critical Loops
   if (WiFi.status() == WL_CONNECTED) {
     robotWs.loop();
     audioMgr.update();
-    
-    // Process WebSocket messages from queue
-    WsQueueMessage wsMsg;
-    while (robotWs.getMessage(wsMsg)) {
-      switch (wsMsg.type) {
-        case WS_MSG_SET_BEHAVIOR:
-          webBehaviorActive = true;
-          webBehaviorTime = millis();
-          startBehavior(wsMsg.data, millis());
-          break;
-          
-        case WS_MSG_SERVO_ACTION:
-          servo.setTarget(wsMsg.intValue, 3000);
-          lastInteractionTime = millis();
-          break;
-          
-        case WS_MSG_LED_ACTION:
-          {
-            const char* color = wsMsg.data;
-            Serial.printf("[LED] Web command: %s\n", color);
-            if (strcmp(color, "off") == 0) leds.setMood("sleeping");
-            else if (strcmp(color, "#ff0000") == 0) leds.setMood("red");
-            else if (strcmp(color, "#00ff00") == 0) leds.setMood("green");
-            else if (strcmp(color, "#0000ff") == 0) leds.setMood("blue");
-            else if (strcmp(color, "#ffff00") == 0) leds.setMood("happy");
-            else if (strcmp(color, "#ff00ff") == 0) leds.setMood("purple");
-            else if (strcmp(color, "#00ffff") == 0) leds.setMood("cyan");
-            else if (strcmp(color, "#ffffff") == 0) leds.setMood("surprised");
-            else leds.setMood(color);
-          }
-          lastInteractionTime = millis();
-          break;
-          
-        case WS_MSG_PLAY_AUDIO:
-          startBehavior("listening");
-          audioMgr.playURL(wsMsg.data);
-          break;
-          
-        case WS_MSG_REQUEST_STATE:
-          if (activeBehavior && robotWs.isConnected()) {
-            robotWs.sendStatus("sync_behavior", activeBehavior->name);
-          }
-          break;
-          
-        case WS_MSG_STOPWATCH_START:
-          rtcMgr.stopwatchStart();
-          break;
-          
-        case WS_MSG_STOPWATCH_STOP:
-          rtcMgr.stopwatchStop();
-          break;
-          
-        case WS_MSG_STOPWATCH_RESET:
-          rtcMgr.stopwatchReset();
-          break;
-          
-        default:
-          break;
-      }
-    }
   } else {
     wifiMgr.handlePortal();
   }
@@ -324,7 +417,10 @@ void loop() {
   leds.loop(dt);
   servo.loop(dt);
   soundFx.update();
-  sensors.update(); // NON-BLOCKING: Updates async ultrasonic sensor
+  
+  // SLEEP FIX: Skip ultrasonic during sleep to prevent micro-freezes
+  bool inSleepState = inSleepMode || inDarkSleepMode;
+  sensors.update(inSleepState); // Skip ultrasonic when sleeping
   
   // Update stopwatch display if running
   if (rtcMgr.isStopwatchRunning()) {
@@ -336,12 +432,19 @@ void loop() {
   }
   
   eye.render(); // Render after all updates
-
-  // 3. Sensor Logic
-  static unsigned long lastSensor = 0;
   
-  // SENSOR DEBOUNCE: Prevents glitchy repeated triggers
-  if (now - lastSensor > 100) {
+  // FREEZE FIX: Call audio update again after render to keep playback smooth
+  if (WiFi.status() == WL_CONNECTED && audioMgr.getIsPlaying()) {
+    audioMgr.update();
+  }
+
+  // 3. Sensor Logic (Crowd-Proof)
+  static unsigned long lastSensor = 0;
+  static unsigned long lastMotionTrigger = 0;
+  static unsigned long lastVolumeTrigger = 0;
+  
+  // SENSOR DEBOUNCE: Extended for crowd environments
+  if (now - lastSensor > (PRESENTATION_MODE ? 200 : 100)) {
     lastSensor = now;
     SensorData d = sensors.read();
     bool activityDetected = false;
@@ -377,44 +480,47 @@ void loop() {
       webBehaviorActive = false;
     }
 
-    // 2. MOTION (only if not in web-triggered behavior)
-    if (allowSensorTrigger && d.motion) {
+    // 2. MOTION (crowd-proof with cooldown)
+    if (allowSensorTrigger && d.motion && (now - lastMotionTrigger > MOTION_COOLDOWN)) {
        if (!activeBehavior || (strcmp(activeBehavior->name, "surprised") != 0 && strcmp(activeBehavior->name, "listening") != 0)) {
-          Serial.println("\n[MOTION] DETECTED!");
+          Serial.println("\n[MOTION] DETECTED! (crowd-proof)");
           startBehavior("surprised", now);
+          lastMotionTrigger = now;
        }
        activityDetected = true;
     }
     
-    // 3. DISTANCE (only if not in web-triggered behavior)
-    if (allowSensorTrigger && d.distance_mm > 0 && d.distance_mm < 150) {
+    // 3. DISTANCE (crowd-proof ranges)
+    if (allowSensorTrigger && d.distance_mm > DISTANCE_MIN && d.distance_mm < (DISTANCE_MIN + 50)) {
       if (!activeBehavior || strcmp(activeBehavior->name, "surprised") != 0) {
-        Serial.printf("\n[DISTANCE] Close: %dmm\n", d.distance_mm);
+        Serial.printf("\n[DISTANCE] Close: %dmm (crowd-proof)\n", d.distance_mm);
         startBehavior("surprised", now);
       }
       activityDetected = true;
     } 
-    else if (allowSensorTrigger && d.distance_mm > 150 && d.distance_mm < 400) {
+    else if (allowSensorTrigger && d.distance_mm > (DISTANCE_MIN + 50) && d.distance_mm < DISTANCE_MAX) {
       if (!activeBehavior || strcmp(activeBehavior->name, "curious_idle") != 0) {
-        Serial.printf("\n[DISTANCE] Medium: %dmm\n", d.distance_mm);
+        Serial.printf("\n[DISTANCE] Medium: %dmm (crowd-proof)\n", d.distance_mm);
         startBehavior("curious_idle", now);
       }
       activityDetected = true;
     }
 
-    // 4. MICROPHONE
+    // 4. MICROPHONE (crowd-proof thresholds)
     #if ENABLE_MICROPHONE
-    if (!servoIsMoving) {
+    if (!servoIsMoving && (now - lastVolumeTrigger > 2000)) { // 2 sec audio cooldown
       int vol = micMgr.getLoudness();
-      if (vol > 40) {
+      if (vol > VOLUME_THRESHOLD_HIGH) {
         startBehavior("surprised", now);
         activityDetected = true;
+        lastVolumeTrigger = now;
       } 
-      else if (vol > 15) {
+      else if (vol > VOLUME_THRESHOLD_LOW) {
         startBehavior("listening", now);
         activityDetected = true;
+        lastVolumeTrigger = now;
       }
-      if (vol > 10) leds.voiceReact(vol);
+      if (vol > 20) leds.voiceReact(vol); // Higher threshold for LED react
     }
     #endif
 
@@ -437,15 +543,22 @@ void loop() {
       }
     }
     
-    if (robotWs.isConnected()) robotWs.sendSensors(d);
+    // RESTART FIX: Send sensors less frequently during sleep (every 2 sec instead of 200ms)
+    static unsigned long lastSensorSend = 0;
+    unsigned long sensorSendInterval = (inSleepMode || inDarkSleepMode) ? 2000 : 500;
+    if (robotWs.isConnected() && (now - lastSensorSend > sensorSendInterval)) {
+      robotWs.sendSensors(d);
+      lastSensorSend = now;
+    }
   }
   
-  // 4. Idle Management
+  // 4. Idle Management (Presentation Mode)
   if (now - lastIdleCheckTime > 1000) {
     lastIdleCheckTime = now;
     unsigned long idleTime = now - lastInteractionTime;
+    unsigned long sleepDelay = PRESENTATION_MODE ? (IDLE_TO_SLEEPY_DELAY * 3) : IDLE_TO_SLEEPY_DELAY; // 60 sec in presentation mode
     
-    if (!inDarkSleepMode && activeBehavior && idleTime > IDLE_TO_SLEEPY_DELAY && !inSleepMode) {
+    if (!inDarkSleepMode && activeBehavior && idleTime > sleepDelay && !inSleepMode) {
       if (strcmp(activeBehavior->name, "sleepy_idle") != 0 && 
           strcmp(activeBehavior->name, "sleeping") != 0) {
         startBehavior("sleepy_idle", now);
@@ -477,6 +590,14 @@ void loop() {
         startBehavior("calm_idle", now);
       }
     }
-}
+  }
+  
+  // RESTART FIX: Feed watchdog and add small delay during sleep
+  // This prevents WDT timeout during long idle periods
+  if (inSleepMode || inDarkSleepMode) {
+    esp_task_wdt_reset(); // Feed the watchdog
+    delay(10); // Small delay to let background tasks (WiFi, WS heartbeat) run
+  }
+  
   yield();
 }

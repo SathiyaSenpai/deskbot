@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeskBot AI Companion - International Event Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        .presentation {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+        
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            padding: 60px 80px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        .slide.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Navigation */
+        .nav {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+        
+        .nav button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .nav button:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+        
+        .slide-counter {
+            position: fixed;
+            bottom: 35px;
+            right: 50px;
+            font-size: 18px;
+            opacity: 0.7;
+        }
+        
+        /* Slide 1 - Title */
+        .title-slide {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(ellipse at center, #1a1a3e 0%, #0d1421 100%);
+        }
+        
+        .robot-icon {
+            font-size: 150px;
+            margin-bottom: 30px;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .title-slide h1 {
+            font-size: 72px;
+            font-weight: 800;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+        
+        .title-slide h2 {
+            font-size: 36px;
+            font-weight: 300;
+            color: #94a3b8;
+            margin-bottom: 40px;
+        }
+        
+        .team-info {
+            margin-top: 40px;
+            padding: 30px 50px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .team-info h3 {
+            font-size: 28px;
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        
+        .team-info p {
+            font-size: 22px;
+            color: #cbd5e1;
+        }
+        
+        /* Slide 2 - Problem & Solution */
+        .problem-slide {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .problem-slide h1 {
+            font-size: 48px;
+            margin-bottom: 50px;
+            color: #00d4ff;
+            text-align: center;
+        }
+        
+        .two-columns {
+            display: flex;
+            gap: 60px;
+            flex: 1;
+            align-items: stretch;
+        }
+        
+        .column {
+            flex: 1;
+            padding: 40px;
+            border-radius: 25px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .problem-col {
+            background: linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(220,38,38,0.1) 100%);
+            border: 2px solid rgba(239,68,68,0.3);
+        }
+        
+        .solution-col {
+            background: linear-gradient(135deg, rgba(34,197,94,0.2) 0%, rgba(22,163,74,0.1) 100%);
+            border: 2px solid rgba(34,197,94,0.3);
+        }
+        
+        .column h2 {
+            font-size: 32px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .problem-col h2 { color: #ef4444; }
+        .solution-col h2 { color: #22c55e; }
+        
+        .column ul {
+            list-style: none;
+            font-size: 22px;
+            line-height: 2.2;
+        }
+        
+        .column li {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            color: #e2e8f0;
+        }
+        
+        .column li::before {
+            content: "→";
+            font-weight: bold;
+        }
+        
+        .problem-col li::before { color: #ef4444; }
+        .solution-col li::before { color: #22c55e; content: "✓"; }
+        
+        /* Slide 3 - Features */
+        .features-slide h1 {
+            font-size: 48px;
+            margin-bottom: 50px;
+            color: #00d4ff;
+            text-align: center;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            flex: 1;
+        }
+        
+        .feature-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 35px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+            background: rgba(255,255,255,0.1);
+            border-color: #00d4ff;
+        }
+        
+        .feature-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
+        .feature-card h3 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: #f8fafc;
+        }
+        
+        .feature-card p {
+            font-size: 16px;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+        
+        /* Slide 4 - Architecture */
+        .arch-slide h1 {
+            font-size: 48px;
+            margin-bottom: 40px;
+            color: #00d4ff;
+            text-align: center;
+        }
+        
+        .architecture {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex: 1;
+            padding: 20px;
+        }
+        
+        .arch-box {
+            padding: 40px 30px;
+            border-radius: 20px;
+            text-align: center;
+            min-width: 200px;
+            transition: all 0.3s ease;
+        }
+        
+        .arch-box:hover {
+            transform: scale(1.05);
+        }
+        
+        .arch-hardware {
+            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            border: 2px solid #8b5cf6;
+        }
+        
+        .arch-server {
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+            border: 2px solid #06b6d4;
+        }
+        
+        .arch-web {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border: 2px solid #10b981;
+        }
+        
+        .arch-box h3 {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        .arch-box ul {
+            list-style: none;
+            font-size: 16px;
+            line-height: 1.8;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .arrow {
+            font-size: 40px;
+            color: #00d4ff;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        .tech-stack {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+        
+        .tech-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 18px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        /* Slide 5 - Impact & Future */
+        .impact-slide h1 {
+            font-size: 48px;
+            margin-bottom: 40px;
+            color: #00d4ff;
+            text-align: center;
+        }
+        
+        .impact-content {
+            display: flex;
+            gap: 50px;
+            flex: 1;
+        }
+        
+        .impact-section {
+            flex: 1;
+        }
+        
+        .impact-section h2 {
+            font-size: 28px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+        }
+        
+        .impact-section ul {
+            list-style: none;
+            font-size: 20px;
+            line-height: 2;
+        }
+        
+        .impact-section li {
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        
+        .impact-list li { border-color: #22c55e; }
+        .future-list li { border-color: #f472b6; }
+        
+        .cta-box {
+            margin-top: 30px;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(124,58,237,0.2) 100%);
+            border-radius: 20px;
+            text-align: center;
+            border: 2px solid rgba(0,212,255,0.3);
+        }
+        
+        .cta-box h3 {
+            font-size: 32px;
+            margin-bottom: 15px;
+            background: linear-gradient(90deg, #00d4ff, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .cta-box p {
+            font-size: 20px;
+            color: #cbd5e1;
+        }
+        
+        /* Fullscreen button */
+        .fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 1000;
+        }
+        
+        .fullscreen-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        /* Print/Export styles */
+        @media print {
+            .nav, .fullscreen-btn, .slide-counter { display: none; }
+            .slide { 
+                display: block !important; 
+                page-break-after: always;
+                position: relative;
+                height: auto;
+                min-height: 100vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+    
+    <div class="presentation">
+        
+        <!-- SLIDE 1: Title Slide -->
+        <div class="slide title-slide active" id="slide1">
+            <div class="robot-icon">🤖</div>
+            <h1>DeskBot AI Companion</h1>
+            <h2>Your Intelligent Desktop Friend Powered by ESP32 & AI</h2>
+            <div class="team-info">
+                <h3>🌐 International Innovation Showcase 2026</h3>
+                <p>Bridging Technology & Human Connection</p>
+            </div>
+            <div style="margin-top: 40px; display: flex; gap: 30px; justify-content: center;">
+                <div class="tech-item">🔌 ESP32 Hardware</div>
+                <div class="tech-item">🧠 Gemini AI</div>
+                <div class="tech-item">🗣️ Voice Interaction</div>
+                <div class="tech-item">📱 Mobile Control</div>
+            </div>
+        </div>
+        
+        <!-- SLIDE 2: Problem & Solution -->
+        <div class="slide problem-slide" id="slide2">
+            <h1>🎯 The Challenge & Our Solution</h1>
+            <div class="two-columns">
+                <div class="column problem-col">
+                    <h2>❌ The Problem</h2>
+                    <ul>
+                        <li>Increasing isolation in digital workspaces</li>
+                        <li>Mental health challenges from remote work</li>
+                        <li>Expensive AI companions ($500-$2000)</li>
+                        <li>Complex setup requiring technical expertise</li>
+                        <li>No affordable emotional support technology</li>
+                        <li>Limited accessibility for developing regions</li>
+                    </ul>
+                </div>
+                <div class="column solution-col">
+                    <h2>✅ DeskBot Solution</h2>
+                    <ul>
+                        <li>Affordable companion under $30 total cost</li>
+                        <li>Emotional expressions via OLED eyes & LED mood lights</li>
+                        <li>Free AI powered by Google Gemini API</li>
+                        <li>Plug-and-play with phone hotspot</li>
+                        <li>Multilingual support (English + Tamil)</li>
+                        <li>DIY-friendly cardboard/3D printed body</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SLIDE 3: Key Features -->
+        <div class="slide features-slide" id="slide3">
+            <h1>✨ Key Features & Capabilities</h1>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">👀</div>
+                    <h3>Expressive OLED Eyes</h3>
+                    <p>Custom eye engine with 15+ emotional states including happy, sad, curious, sleeping, and surprised expressions</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <h3>AI Conversation</h3>
+                    <p>Google Gemini 2.5 Flash integration for intelligent, context-aware conversations with personality</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🗣️</div>
+                    <h3>Voice Interaction</h3>
+                    <p>Microsoft Edge TTS for natural speech output + Web Speech API for voice input from any device</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌈</div>
+                    <h3>Mood LED Ring</h3>
+                    <p>16 programmable WS2812 LEDs that sync with emotions - breathing, rainbow, and alert animations</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Mobile Web Control</h3>
+                    <p>Responsive dashboard accessible from any browser - control emotions, chat, and monitor sensors</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤲</div>
+                    <h3>Multi-Sensor Awareness</h3>
+                    <p>Touch, motion, distance, and light sensors for environmental awareness and interaction</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SLIDE 4: Technical Architecture -->
+        <div class="slide arch-slide" id="slide4">
+            <h1>🏗️ System Architecture</h1>
+            <div class="architecture">
+                <div class="arch-box arch-hardware">
+                    <h3>🔌 ESP32 Hardware</h3>
+                    <ul>
+                        <li>SH1106 OLED Display</li>
+                        <li>SG90 Servo Motor</li>
+                        <li>WS2812 LED Ring</li>
+                        <li>Ultrasonic Sensor</li>
+                        <li>PIR Motion Sensor</li>
+                        <li>Touch Sensors</li>
+                    </ul>
+                </div>
+                <div class="arrow">⟷</div>
+                <div class="arch-box arch-server">
+                    <h3>🖥️ Node.js Server</h3>
+                    <ul>
+                        <li>WebSocket Bridge</li>
+                        <li>Gemini AI Integration</li>
+                        <li>Edge TTS Engine</li>
+                        <li>Audio Management</li>
+                        <li>State Synchronization</li>
+                    </ul>
+                </div>
+                <div class="arrow">⟷</div>
+                <div class="arch-box arch-web">
+                    <h3>🌐 Web Interface</h3>
+                    <ul>
+                        <li>Real-time Dashboard</li>
+                        <li>Chat Interface</li>
+                        <li>Behavior Controls</li>
+                        <li>Sensor Monitoring</li>
+                        <li>Speech Recognition</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="tech-stack">
+                <div class="tech-item">⚡ C++ / Arduino</div>
+                <div class="tech-item">🟢 Node.js</div>
+                <div class="tech-item">🌐 WebSocket</div>
+                <div class="tech-item">🤖 Gemini 2.5 Flash</div>
+                <div class="tech-item">🔊 Edge TTS</div>
+                <div class="tech-item">📱 PWA Ready</div>
+            </div>
+        </div>
+        
+        <!-- SLIDE 5: Impact & Future -->
+        <div class="slide impact-slide" id="slide5">
+            <h1>🌍 Impact & Future Vision</h1>
+            <div class="impact-content">
+                <div class="impact-section">
+                    <h2>🎯 Social Impact</h2>
+                    <ul class="impact-list">
+                        <li>💰 Democratizes AI companionship for all income levels</li>
+                        <li>🧠 Mental wellness support through friendly interaction</li>
+                        <li>🎓 Educational tool for STEM learning & robotics</li>
+                        <li>👴 Elderly companionship and routine assistance</li>
+                        <li>🌐 Multilingual accessibility for diverse communities</li>
+                    </ul>
+                </div>
+                <div class="impact-section">
+                    <h2>🚀 Future Roadmap</h2>
+                    <ul class="future-list">
+                        <li>🏥 Healthcare integration for patient monitoring</li>
+                        <li>📚 Educational AI tutor capabilities</li>
+                        <li>🏠 Smart home integration (IoT hub)</li>
+                        <li>🎮 Gamification for productivity & habits</li>
+                        <li>🤝 Open-source community expansion</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="cta-box">
+                <h3>🤖 Meet DeskBot - Technology with Heart</h3>
+                <p>Affordable • Open Source • Accessible • Human-Centered AI</p>
+                <p style="margin-top: 15px; font-size: 24px;">✨ Thank you! Questions Welcome! ✨</p>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Navigation -->
+    <div class="nav">
+        <button onclick="prevSlide()">◀ Previous</button>
+        <button onclick="nextSlide()">Next ▶</button>
+    </div>
+    <div class="slide-counter">
+        <span id="currentSlide">1</span> / <span id="totalSlides">5</span>
+    </div>
+    
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 5;
+        
+        function showSlide(n) {
+            // Hide all slides
+            document.querySelectorAll('.slide').forEach(slide => {
+                slide.classList.remove('active');
+            });
+            
+            // Show current slide
+            document.getElementById(`slide${n}`).classList.add('active');
+            document.getElementById('currentSlide').textContent = n;
+        }
+        
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                currentSlide++;
+                showSlide(currentSlide);
+            }
+        }
+        
+        function prevSlide() {
+            if (currentSlide > 1) {
+                currentSlide--;
+                showSlide(currentSlide);
+            }
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            } else if (e.key === 'f' || e.key === 'F') {
+                toggleFullscreen();
+            }
+        });
+        
+        // Touch/swipe support for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+        
+        document.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+        
+        function handleSwipe() {
+            const diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) nextSlide();
+                else prevSlide();
+            }
+        }
+    </script>
+</body>
+</html>

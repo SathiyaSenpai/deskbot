@@ -25,7 +25,7 @@ public:
     Serial.println("[SENSORS] Initialized (Simple ultrasonic)");
     Serial.printf("  PIR: %d\n", PIN_PIR);
     Serial.printf("  Ultrasonic: Trig=%d, Echo=%d\n", PIN_ULTRASONIC_TRIG, PIN_ULTRASONIC_ECHO);
-    Serial.printf("  Touch: Head=%d, Side=%d, Threshold=%d\n", PIN_TOUCH_HEAD, PIN_TOUCH_SIDE, TOUCH_THRESHOLD);
+    Serial.printf("  Touch: Head=%d, Side=%d, Threshold=%d\n", PIN_TOUCH_HEAD, PIN_TOUCH_SIDE, ROBOT_TOUCH_THRESHOLD);
     
     // Test ultrasonic sensor immediately
     Serial.println("[ULTRASONIC] Running connection test...");
@@ -53,14 +53,14 @@ public:
     int touchHead = touchRead(PIN_TOUCH_HEAD);
     int touchSide = touchRead(PIN_TOUCH_SIDE);
     
-    d.touchHead = (touchHead < TOUCH_THRESHOLD);
-    d.touchSide = (touchSide < TOUCH_THRESHOLD);
+    d.touchHead = (touchHead < ROBOT_TOUCH_THRESHOLD);
+    d.touchSide = (touchSide < ROBOT_TOUCH_THRESHOLD);
     
     // Debug output for touch calibration (less frequent)
     static unsigned long lastDebug = 0;
     if (millis() - lastDebug > 3000) {
       Serial.printf("[TOUCH] Head: %d, Side: %d (threshold: %d)\n", 
-                    touchHead, touchSide, TOUCH_THRESHOLD);
+                    touchHead, touchSide, ROBOT_TOUCH_THRESHOLD);
       lastDebug = millis();
     }
 

@@ -121,7 +121,7 @@ export const AI_CONFIG = {
     ollamaUrl: 'http://localhost:11434',
     
     // Gemini settings (FREE - 15 req/min)
-    geminiApiKey: process.env.GEMINI_API_KEY || 'Your API KEY',
+    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyDxGkCehomOwi44eCvLBnJaNwfqzjA18XI',
     geminiModel: 'gemini-2.5-flash', // Latest stable model
   },
   

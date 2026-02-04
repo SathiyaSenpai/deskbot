@@ -36,6 +36,6 @@
 // Touch sensors (capacitive)
 #define PIN_TOUCH_HEAD      4   // T0 - Primary touch (head)
 #define PIN_TOUCH_SIDE      15   // T2 - Secondary touch (side)
-#define TOUCH_THRESHOLD     40  // Lower = more sensitive
+#define ROBOT_TOUCH_THRESHOLD     40  // Lower = more sensitive
 
 #endif // PINS_H

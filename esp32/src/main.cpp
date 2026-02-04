@@ -23,6 +23,12 @@
 #include "soc/rtc_cntl_reg.h"
 #include "esp_task_wdt.h"
 
+
+// --- FUNCTION DECLARATIONS ---
+void testAudioSystems();
+void processWebSocketMessage(const WsQueueMessage& msg);
+void handleMessage(const char* type, JsonDocument& doc);
+
 // --- OBJECTS ---
 U8G2_SH1106_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
 EyeEngine eye(display);
@@ -118,7 +124,6 @@ const unsigned long IDLE_TO_SLEEPY_DELAY = 20000;
 
 // --- CROWD-PROOF SETTINGS FOR INTERNATIONAL EVENT ---
 const bool PRESENTATION_MODE = true;  // Disable sleep, optimize for crowds
-const int TOUCH_THRESHOLD = 35;       // Less sensitive (default: 25)
 const unsigned long MOTION_COOLDOWN = 3000;   // 3 sec motion cooldown
 const int DISTANCE_MIN = 180;         // Ignore very close readings (cm)
 const int DISTANCE_MAX = 350;         // Shorter range in crowds
@@ -222,6 +227,52 @@ void startBehavior(const char* name) {
 bool webBehaviorActive = false;
 unsigned long webBehaviorTime = 0;
 
+// Process websocket messages from the queue
+void processWebSocketMessage(const WsQueueMessage& msg) {
+  switch (msg.type) {
+    case WS_MSG_SET_BEHAVIOR:
+      webBehaviorActive = true;
+      webBehaviorTime = millis();
+      startBehavior(msg.data, millis());
+      break;
+    case WS_MSG_SERVO_ACTION:
+      servo.setTarget(msg.intValue, 3000);
+      lastInteractionTime = millis();
+      break;
+    case WS_MSG_LED_ACTION:
+      Serial.printf("[LED] Web command: %s\n", msg.data);
+      if (strcmp(msg.data, "off") == 0) {
+        leds.setMood("sleeping");
+      } else {
+        leds.setMood(msg.data);
+      }
+      lastInteractionTime = millis();
+      break;
+    case WS_MSG_PLAY_AUDIO:
+      startBehavior("listening");
+      audioMgr.playURL(msg.data);
+      lastInteractionTime = millis();
+      break;
+    case WS_MSG_REQUEST_STATE:
+      if (activeBehavior && robotWs.isConnected()) {
+        robotWs.sendStatus("sync_behavior", activeBehavior->name);
+      }
+      break;
+    case WS_MSG_STOPWATCH_START:
+      rtcMgr.stopwatchStart();
+      break;
+    case WS_MSG_STOPWATCH_STOP:
+      rtcMgr.stopwatchStop();
+      break;
+    case WS_MSG_STOPWATCH_RESET:
+      rtcMgr.stopwatchReset();
+      break;
+    default:
+      break;
+  }
+}
+
+
 void handleMessage(const char* type, JsonDocument& doc) {
   if (strcmp(type, "set_behavior") == 0) {
     webBehaviorActive = true;
@@ -291,7 +342,7 @@ void handleMessage(const char* type, JsonDocument& doc) {
   else if (strcmp(type, "wake_up") == 0) {
     Serial.println("[WAKE] Wake up command received");
     // Force the robot out of sleep state
-    isSleeping = false;
+    inSleepMode = false;
     lastInteractionTime = millis();
     
     // Show appropriate expression based on the wake-up reason
@@ -314,7 +365,7 @@ void handleMessage(const char* type, JsonDocument& doc) {
     
     Serial.printf("[WAKE] Staying awake for %lu ms\n", duration);
     lastInteractionTime = millis();
-    isSleeping = false;
+    inSleepMode = false;
     
     // Start random movement behavior
     startBehavior("random_movement");
@@ -375,7 +426,6 @@ void setup() {
       audioMgr.begin();
       
       robotWs.setServer(wifiMgr.getServerIP().c_str(), wifiMgr.getServerPort());
-      robotWs.setCallback(handleMessage);
       robotWs.begin();
   }
   
@@ -408,6 +458,12 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     robotWs.loop();
     audioMgr.update();
+    
+    // Process WebSocket messages from queue
+    WsQueueMessage wsMsg;
+    while (robotWs.getMessage(wsMsg)) {
+      processWebSocketMessage(wsMsg);
+    }
   } else {
     wifiMgr.handlePortal();
   }

@@ -243,9 +243,15 @@ void processWebSocketMessage(const WsQueueMessage& msg) {
       Serial.printf("[LED] Web command: %s\n", msg.data);
       if (strcmp(msg.data, "off") == 0) {
         leds.setMood("sleeping");
-      } else {
-        leds.setMood(msg.data);
-      }
+      } 
+      else if (strcmp(msg.data, "#ff0000") == 0) leds.setMood("red");
+      else if (strcmp(msg.data, "#00ff00") == 0) leds.setMood("green");
+      else if (strcmp(msg.data, "#0000ff") == 0) leds.setMood("blue");
+      else if (strcmp(msg.data, "#ffff00") == 0) leds.setMood("happy");
+      else if (strcmp(msg.data, "#ff00ff") == 0) leds.setMood("purple");
+      else if (strcmp(msg.data, "#00ffff") == 0) leds.setMood("cyan");
+      else if (strcmp(msg.data, "#ffffff") == 0) leds.setMood("surprised");
+      else leds.setMood(msg.data);
       lastInteractionTime = millis();
       break;
     case WS_MSG_PLAY_AUDIO:
@@ -502,7 +508,7 @@ void loop() {
   // SENSOR DEBOUNCE: Extended for crowd environments
   if (now - lastSensor > (PRESENTATION_MODE ? 200 : 100)) {
     lastSensor = now;
-    SensorData d = sensors.read();
+    SensorData d = sensors.read(); // Always read sensors, even when sleeping
     bool activityDetected = false;
     bool servoIsMoving = servo.isMoving();
     

@@ -504,6 +504,10 @@ void loop() {
   static unsigned long lastSensor = 0;
   static unsigned long lastMotionTrigger = 0;
   static unsigned long lastVolumeTrigger = 0;
+  static bool previousMotionState = false;
+  static unsigned long motionStartTime = 0;
+  static unsigned long lastIdleMovement = 0;
+  const unsigned long MOTION_CONTINUOUS_RETRIGGER = 300000; // 5 minutes for continuous presence
   
   // SENSOR DEBOUNCE: Extended for crowd environments
   if (now - lastSensor > (PRESENTATION_MODE ? 200 : 100)) {
@@ -542,15 +546,28 @@ void loop() {
       webBehaviorActive = false;
     }
 
-    // 2. MOTION (crowd-proof with cooldown)
-    if (allowSensorTrigger && d.motion && (now - lastMotionTrigger > MOTION_COOLDOWN)) {
+    // 2. MOTION (edge detection for continuous presence fix)
+    bool isNewMotion = d.motion && !previousMotionState; // Rising edge only
+    bool continuousPresence = d.motion && previousMotionState && 
+                             (now - motionStartTime > MOTION_CONTINUOUS_RETRIGGER);
+    
+    if (allowSensorTrigger && (isNewMotion || continuousPresence) && 
+        (now - lastMotionTrigger > MOTION_COOLDOWN)) {
        if (!activeBehavior || (strcmp(activeBehavior->name, "surprised") != 0 && strcmp(activeBehavior->name, "listening") != 0)) {
-          Serial.println("\n[MOTION] DETECTED! (crowd-proof)");
+          if (isNewMotion) {
+            Serial.println("\n[MOTION] NEW MOTION DETECTED!");
+            motionStartTime = now;
+          } else {
+            Serial.println("\n[MOTION] CONTINUOUS PRESENCE RE-TRIGGER (5+ min)");
+            motionStartTime = now; // Reset timer
+          }
           startBehavior("surprised", now);
           lastMotionTrigger = now;
        }
        activityDetected = true;
     }
+    
+    previousMotionState = d.motion; // Update motion state
     
     // 3. DISTANCE (crowd-proof ranges)
     if (allowSensorTrigger && d.distance_mm > DISTANCE_MIN && d.distance_mm < (DISTANCE_MIN + 50)) {
@@ -591,6 +608,19 @@ void loop() {
       lastInteractionTime = now;
       inSleepMode = false;
       inDarkSleepMode = false;
+    }
+    
+    // 6. AUTONOMOUS IDLE EYE MOVEMENTS (when calm and no activity)
+    if (!activityDetected && activeBehavior && 
+        strcmp(activeBehavior->name, "calm_idle") == 0 && 
+        (now - lastIdleMovement > 8000 + random(5000))) { // 8-13 second intervals
+      
+      // Trigger gentle random servo movements during calm idle
+      int randomAngle = 90 + random(-12, 13); // ±12° from center (78-102°)
+      servo.setIdleMovement(randomAngle, 3000); // 3 second gentle movement
+      lastIdleMovement = now;
+      
+      Serial.printf("[IDLE] Autonomous eye movement to %d°\n", randomAngle);
     }
 
     // 6. DARKNESS LOGIC

@@ -114,15 +114,20 @@ export const AI_CONFIG = {
   
   // LLM Settings  
   llm: {
-    engine: 'gemini', // 'ollama' (local) or 'gemini' (free API)
+    engine: 'groq', // 'groq' (fast, free), 'gemini', or 'ollama' (local)
+    
+    // Groq settings (FREE - 14,400 req/day, VERY FAST!)
+    groqApiKey: process.env.GROQ_API_KEY || 'YOUR_GROQ_API_KEY_HERE',
+    groqModel: 'llama-3.3-70b-versatile', // Best quality model
+    // Alternative models: 'llama-3.1-8b-instant' (faster), 'mixtral-8x7b-32768'
     
     // Ollama settings (for local LLM)
     ollamaModel: 'tinyllama',
     ollamaUrl: 'http://localhost:11434',
     
-    // Gemini settings (FREE - 15 req/min)
-    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyDxGkCehomOwi44eCvLBnJaNwfqzjA18XI',
-    geminiModel: 'gemini-2.5-flash', // Latest stable model
+    // Gemini settings (backup - FREE 15 req/min)
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    geminiModel: 'gemini-2.5-flash',
   },
   
   // Robot personality prompt
@@ -346,19 +351,97 @@ export async function chat(userMessage, options = {}) {
   
   let response;
   
-  if (AI_CONFIG.llm.engine === 'gemini' && AI_CONFIG.llm.geminiApiKey) {
-    response = await chatWithGemini(userMessage);
-  } else if (AI_CONFIG.llm.engine === 'ollama') {
-    response = await chatWithOllama(userMessage);
-  } else {
-    // Fallback - simple responses
-    response = getFallbackResponse(userMessage);
+  // Try engines in order: configured engine first, then fallbacks
+  const engine = AI_CONFIG.llm.engine;
+  
+  // Try Groq first (fastest, most reliable for events)
+  if ((engine === 'groq' || engine === 'auto') && AI_CONFIG.llm.groqApiKey && AI_CONFIG.llm.groqApiKey !== 'key') {
+    response = await chatWithGroq(userMessage);
+    if (response && !response.startsWith('That sounds')) {
+      conversationHistory.push({ role: 'assistant', content: response });
+      return response;
+    }
   }
   
-  // Add response to history
+  // Try Gemini as backup
+  if ((engine === 'gemini' || engine === 'auto') && AI_CONFIG.llm.geminiApiKey) {
+    response = await chatWithGemini(userMessage);
+    if (response && !response.startsWith('That sounds')) {
+      conversationHistory.push({ role: 'assistant', content: response });
+      return response;
+    }
+  }
+  
+  // Try Ollama (local)
+  if (engine === 'ollama') {
+    response = await chatWithOllama(userMessage);
+    if (response && !response.startsWith('That sounds')) {
+      conversationHistory.push({ role: 'assistant', content: response });
+      return response;
+    }
+  }
+  
+  // Final fallback - simple responses
+  response = getFallbackResponse(userMessage);
   conversationHistory.push({ role: 'assistant', content: response });
   
   return response;
+}
+
+// ============================================================================
+// GROQ API (FREE - 14,400 req/day, VERY FAST!)
+// Get your free API key at: https://console.groq.com/
+// ============================================================================
+async function chatWithGroq(userMessage) {
+  const apiKey = AI_CONFIG.llm.groqApiKey;
+  console.log('[LLM] Trying Groq API (fast!)...');
+  
+  if (!apiKey || apiKey === 'YOUR_GROQ_API_KEY_HERE') {
+    console.log('[LLM] No Groq API key found');
+    return null;
+  }
+  
+  try {
+    console.log(`[LLM] Calling Groq model: ${AI_CONFIG.llm.groqModel}`);
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: AI_CONFIG.llm.groqModel,
+        messages: [
+          { role: 'system', content: AI_CONFIG.systemPrompt },
+          ...conversationHistory.slice(-6), // Last 3 exchanges for context
+          { role: 'user', content: userMessage }
+        ],
+        temperature: 0.7,
+        max_tokens: 150,
+        top_p: 0.9,
+      })
+    });
+    
+    const data = await response.json();
+    console.log('[LLM] Groq response status:', response.status);
+    
+    if (!response.ok) {
+      console.log('[LLM] Groq API error:', data.error?.message || data);
+      return null;
+    }
+    
+    if (data.choices && data.choices[0]) {
+      const aiResponse = data.choices[0].message.content.trim();
+      console.log('[LLM] Groq success:', aiResponse);
+      return aiResponse;
+    }
+    
+    console.log('[LLM] No valid response from Groq');
+    return null;
+  } catch (error) {
+    console.error('[LLM] Groq error:', error.message);
+    return null;
+  }
 }
 
 async function chatWithGemini(userMessage) {
@@ -366,8 +449,8 @@ async function chatWithGemini(userMessage) {
   console.log('[LLM] Trying Gemini API...');
   
   if (!apiKey) {
-    console.log('[LLM] No API key found, using fallback');
-    return getFallbackResponse(userMessage);
+    console.log('[LLM] No Gemini API key found');
+    return null;
   }
   
   try {

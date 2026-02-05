@@ -40,7 +40,7 @@ public:
         // Initialize I2S output
         audioOutput = new AudioOutputI2S();
         audioOutput->SetPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-        audioOutput->SetGain(0.3);  // Lower volume to prevent distortion
+        audioOutput->SetGain(1.0);  // Increased volume for better audio output
         
         // Initialize MP3 generator
         mp3 = new AudioGeneratorMP3();

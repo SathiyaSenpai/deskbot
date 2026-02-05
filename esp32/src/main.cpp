@@ -505,9 +505,13 @@ void loop() {
   static unsigned long lastMotionTrigger = 0;
   static unsigned long lastVolumeTrigger = 0;
   static bool previousMotionState = false;
+  static bool motionPresenceActive = false; // Tracks if someone is present (with hold time)
   static unsigned long motionStartTime = 0;
+  static unsigned long lastMotionHigh = 0; // Last time PIR was HIGH
   static unsigned long lastIdleMovement = 0;
   const unsigned long MOTION_CONTINUOUS_RETRIGGER = 300000; // 5 minutes for continuous presence
+  const unsigned long MOTION_HOLD_TIME = 10000; // 10 sec - ignore brief LOW periods (person still there)
+  const unsigned long MOTION_AWAY_CONFIRM = 15000; // 15 sec of no motion = person left
   
   // SENSOR DEBOUNCE: Extended for crowd environments
   if (now - lastSensor > (PRESENTATION_MODE ? 200 : 100)) {
@@ -546,17 +550,39 @@ void loop() {
       webBehaviorActive = false;
     }
 
-    // 2. MOTION (edge detection for continuous presence fix)
-    bool isNewMotion = d.motion && !previousMotionState; // Rising edge only
-    bool continuousPresence = d.motion && previousMotionState && 
-                             (now - motionStartTime > MOTION_CONTINUOUS_RETRIGGER);
+    // 2. MOTION (smart presence detection - ignores small movements when present)
+    // Track when PIR was last HIGH
+    if (d.motion) {
+      lastMotionHigh = now;
+    }
     
-    if (allowSensorTrigger && (isNewMotion || continuousPresence) && 
+    // Determine if someone is truly present (with hold time to ignore flickers)
+    bool wasPresent = motionPresenceActive;
+    
+    if (d.motion && !motionPresenceActive) {
+      // New person arrived
+      motionPresenceActive = true;
+      motionStartTime = now;
+    } else if (!d.motion && motionPresenceActive) {
+      // PIR went LOW - but is person still there? (small movements cause brief LOW)
+      if (now - lastMotionHigh > MOTION_AWAY_CONFIRM) {
+        // No motion for 15 sec = person left
+        motionPresenceActive = false;
+        Serial.println("[MOTION] Person left (15s no motion)");
+      }
+      // Otherwise, keep motionPresenceActive = true (person still there, just not moving)
+    }
+    
+    // Only trigger on TRUE new arrival (not small movements while present)
+    bool isNewArrival = motionPresenceActive && !wasPresent;
+    bool continuousPresenceRetrigger = motionPresenceActive && wasPresent && 
+                                       (now - motionStartTime > MOTION_CONTINUOUS_RETRIGGER);
+    
+    if (allowSensorTrigger && (isNewArrival || continuousPresenceRetrigger) && 
         (now - lastMotionTrigger > MOTION_COOLDOWN)) {
        if (!activeBehavior || (strcmp(activeBehavior->name, "surprised") != 0 && strcmp(activeBehavior->name, "listening") != 0)) {
-          if (isNewMotion) {
-            Serial.println("\n[MOTION] NEW MOTION DETECTED!");
-            motionStartTime = now;
+          if (isNewArrival) {
+            Serial.println("\n[MOTION] NEW PERSON ARRIVED!");
           } else {
             Serial.println("\n[MOTION] CONTINUOUS PRESENCE RE-TRIGGER (5+ min)");
             motionStartTime = now; // Reset timer
@@ -567,7 +593,7 @@ void loop() {
        activityDetected = true;
     }
     
-    previousMotionState = d.motion; // Update motion state
+    previousMotionState = d.motion; // Update raw motion state for debugging
     
     // 3. DISTANCE (crowd-proof ranges)
     if (allowSensorTrigger && d.distance_mm > DISTANCE_MIN && d.distance_mm < (DISTANCE_MIN + 50)) {

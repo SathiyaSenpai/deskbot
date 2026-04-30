@@ -14,6 +14,13 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
 * SH1106 OLED Display (1.3")
 * SG90 Servo
 * TTP223 Touch Sensor
+* Speaker
+* I2S Amp
+* Buzzer
+* LDR Module
+* PIR Motion Detection Sensor
+* Ultrasonic Sensor
+* 16Bit RGB LED (WS2812B)
 
 ## 🚀 How to Run (Termux)
 1.  Install Termux on Android.

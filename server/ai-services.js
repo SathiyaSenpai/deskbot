@@ -1,17 +1,3 @@
-/**
- * AI Services Module for DeskBot
- * 
- * Supports:
- * - Edge TTS (FREE, works everywhere - PC & Phone!)
- * - Piper TTS (local, free - PC only)
- * - Ollama LLM (local, free) OR Gemini API (free tier)
- * 
- * TTS Priority:
- * 1. Edge TTS (default - FREE, online, great quality)
- * 2. Piper TTS (if installed locally)
- * 3. Browser TTS (fallback)
- */
-
 import { spawn, exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -22,9 +8,6 @@ const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ============================================================================
-// AUDIO FILE CLEANUP - Prevents disk filling up during demo
-// ============================================================================
 function cleanupOldAudio() {
   const audioDir = path.join(__dirname, 'audio');
   if (!fs.existsSync(audioDir)) return;
@@ -61,9 +44,6 @@ function cleanupOldAudio() {
 cleanupOldAudio();
 setInterval(cleanupOldAudio, 10 * 60 * 1000);
 
-// ============================================================================
-// TEXT CLEANING FOR TTS
-// ============================================================================
 function cleanTextForTTS(text) {
   // Remove emojis and emoji descriptions
   let cleanText = text
@@ -98,12 +78,7 @@ export const AI_CONFIG = {
     engine: 'edge', // 'edge' (online, free) or 'piper' (local) or 'browser'
     
     // Edge TTS settings (FREE, works on phone!)
-    edgeVoice: 'en-US-JennyNeural', // US English female (clean English)
-    // Other options:
-    // 'en-IN-NeerjaNeural' - Indian English female 
-    // 'en-IN-PrabhatNeural' - Indian English male
-    // 'en-US-AriaNeural' - US English female (alternative)
-    // 'en-GB-SoniaNeural' - British English female
+    edgeVoice: 'en-US-JennyNeural',
     
     // Piper TTS settings (local - PC only)
     piperModel: 'en_US-lessac-medium',
@@ -116,16 +91,15 @@ export const AI_CONFIG = {
   llm: {
     engine: 'groq', // 'groq' (fast, free), 'gemini', or 'ollama' (local)
     
-    // Groq settings (FREE - 14,400 req/day, VERY FAST!)
+    // Groq settings
     groqApiKey: process.env.GROQ_API_KEY || 'YOUR_GROQ_API_KEY_HERE',
-    groqModel: 'llama-3.3-70b-versatile', // Best quality model
-    // Alternative models: 'llama-3.1-8b-instant' (faster), 'mixtral-8x7b-32768'
+    groqModel: 'llama-3.3-70b-versatile',
     
     // Ollama settings (for local LLM)
     ollamaModel: 'tinyllama',
     ollamaUrl: 'http://localhost:11434',
     
-    // Gemini settings (backup - FREE 15 req/min)
+    // Gemini settings
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     geminiModel: 'gemini-2.5-flash',
   },
@@ -166,28 +140,6 @@ EXAMPLES:
 
 Remember: You're tiny, cute, and absolutely LOVE being someone's desk companion!`,
 };
-
-// ============================================================================
-// EDGE TTS (FREE, Online, Works on Phone!)
-// ============================================================================
-
-/*
-Edge TTS uses Microsoft's free Text-to-Speech service.
-- No API key required
-- Works everywhere (PC, Phone, Server)
-- Many voice options including Indian English & Tamil!
-
-Voice options:
-- en-IN-NeerjaNeural (Indian English Female) ⭐ Default
-- en-IN-PrabhatNeural (Indian English Male)
-- ta-IN-PallaviNeural (Tamil Female)
-- ta-IN-ValluvarNeural (Tamil Male)
-- en-US-JennyNeural (US English Female)
-- en-GB-SoniaNeural (British English Female)
-
-Install: pipx install edge-tts
-Test: edge-tts --text "Hello" --write-media test.mp3
-*/
 
 // Check if edge-tts CLI is available
 let edgeTTSAvailable = false;
@@ -414,10 +366,6 @@ export async function chat(userMessage, options = {}) {
   return response;
 }
 
-// ============================================================================
-// GROQ API (FREE - 14,400 req/day, VERY FAST!)
-// Get your free API key at: https://console.groq.com/
-// ============================================================================
 async function chatWithGroq(userMessage) {
   const apiKey = AI_CONFIG.llm.groqApiKey;
   console.log('[LLM] Trying Groq API (fast!)...');
@@ -588,10 +536,6 @@ function getFallbackResponse(userMessage) {
   return defaults[Math.floor(Math.random() * defaults.length)];
 }
 
-// ============================================================================
-// EMOTION DETECTION (Simple keyword-based)
-// ============================================================================
-
 export function detectEmotion(text) {
   const msg = text.toLowerCase();
   
@@ -613,10 +557,6 @@ export function detectEmotion(text) {
   
   return 'neutral';
 }
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
 
 export default {
   textToSpeech,

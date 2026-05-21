@@ -34,6 +34,18 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
  *  Piper TTS (if installed locally)
  *  Browser TTS (fallback)
 
+## Configuration
+
+### Before starting the server, you must configure your local network and API credentials.
+
+ *  Open your `src/config file`.
+
+ *  Update the Wi-Fi name and password to match your mobile hotspot.
+
+ *  Open `server/public/ai-services.js`.
+
+ *  Insert your Groq API key into the required field.
+
 ## 🚀 How to Run (Termux)
 1.  Install Termux on Android.
 2.  Run `pkg install nodejs`.

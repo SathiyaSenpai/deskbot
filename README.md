@@ -24,12 +24,12 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
 
 ## AI Services Module for DeskBot
 
-# Supports:
+### Supports:
  * - Edge TTS (FREE, works everywhere - PC & Phone!)
  * - Piper TTS (local, free - PC only)
  * - Ollama LLM (local, free) OR Gemini API (free tier)
 
-# TTS Priority:
+### TTS Priority:
  *  Edge TTS (default - FREE, online, great quality)
  *  Piper TTS (if installed locally)
  *  Browser TTS (fallback)

@@ -4,7 +4,10 @@
 .env.production
 *.pem
 *.key
+
+# node and vscode
 .vscode/
+node_modules/
 
 # Compiled Python
 __pycache__/

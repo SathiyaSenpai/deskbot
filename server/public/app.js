@@ -20,7 +20,7 @@ const elements = {
   sendBtn: document.getElementById('sendButton')
 };
 
-// COMPLETE BEHAVIOR DEFINITIONS (Synced with firmware behaviors.h)
+// COMPLETE BEHAVIOR DEFINITIONS
 const BEHAVIORS = {
   // IDLE STATES
   'calm_idle':   { 
@@ -32,7 +32,7 @@ const BEHAVIORS = {
     width: 34, height: 32, radius: 10, upperCurve: 0.3, lowerCurve: 0
   },
 
-  // EMOTIONS (PHASE 13: Geometry-based)
+  // EMOTIONS
   'happy': { 
     openness: 1.0, scaleX: 1.1, top: 0.0, bot: 0.6, x: 0, y: -2,
     width: 35, height: 42, radius: 12, upperCurve: -0.1, lowerCurve: 0.2
@@ -101,7 +101,7 @@ let blinkTimer = 0;
 let nextBlink = 3.0;
 let isBlinking = false;
 
-// PHASE 6: Effect rendering
+// Effect rendering
 let activeEffect = 'none';
 let effectTimer = 0;
 
@@ -153,7 +153,7 @@ function renderLoop(timestamp) {
     elements.eyeLeft.style.transform = transform;
     elements.eyeLeft.style.clipPath = clip;
     
-    // PHASE 13: Apply geometry if available
+    // Apply geometry if available
     if (currentAnim.width) {
       const w = currentAnim.width * 0.43;
       const h = currentAnim.height * 0.43;
@@ -184,7 +184,7 @@ function renderLoop(timestamp) {
   requestAnimationFrame(renderLoop);
 }
 
-// PHASE 6: Effect rendering system
+// Effect rendering system
 function renderEffects() {
   if (!elements.eyeRight) return;
   
@@ -276,10 +276,9 @@ function connect() {
         setBehavior(msg.detail);
       }
     }
-    // Sync from button clicks (only if not from our own command)
+    // Sync from button clicks
     else if (msg.type === 'set_behavior') {
-      // Only update if this is a response, not our own command
-      // We'll track if we sent this command to avoid double updates
+
       if (!state.pendingBehavior || state.pendingBehavior !== msg.name) {
         setBehavior(msg.name);
       }
@@ -422,9 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
   
-  // =========================================================================
-  // PHONE MIC - Web Speech API Implementation
-  // =========================================================================
+  // PHONE MIC Web Speech API Implementation
   const micButton = document.getElementById('micButton');
   const micIcon = micButton?.querySelector('.mic-icon');
   const micStatus = micButton?.querySelector('.mic-status');
@@ -549,10 +546,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ==============================================
-// Demo Panel Functions
-// ==============================================
-
 // Stopwatch controls
 let stopwatchInterval = null;
 let stopwatchStartTime = null;
@@ -610,10 +603,6 @@ function updateStopwatchDisplay() {
   
   display.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
-
-// ==============================================
-// Audio Testing Function
-// ==============================================
 
 function testAudio() {
   if (state.ws && state.isConnected) {

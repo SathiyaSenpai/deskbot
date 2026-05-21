@@ -22,6 +22,18 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
 * Ultrasonic Sensor
 * 16Bit RGB LED (WS2812B)
 
+## AI Services Module for DeskBot
+
+# Supports:
+ * - Edge TTS (FREE, works everywhere - PC & Phone!)
+ * - Piper TTS (local, free - PC only)
+ * - Ollama LLM (local, free) OR Gemini API (free tier)
+
+# TTS Priority:
+ *  Edge TTS (default - FREE, online, great quality)
+ *  Piper TTS (if installed locally)
+ *  Browser TTS (fallback)
+
 ## 🚀 How to Run (Termux)
 1.  Install Termux on Android.
 2.  Run `pkg install nodejs`.

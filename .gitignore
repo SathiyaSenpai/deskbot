@@ -4,6 +4,7 @@
 .env.production
 *.pem
 *.key
+.vscode
 
 # Compiled Python
 __pycache__/

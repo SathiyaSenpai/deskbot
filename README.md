@@ -26,5 +26,6 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
 1.  Install Termux on Android.
 2.  Run `pkg install nodejs`.
 3.  Clone this repo.
-4.  Run `node server.js`.
-5.  Turn on Hotspot and power up the robot.
+4.  Go to server folder `cd server`
+5.  Run `node server.js`.
+6.  Turn on Hotspot and power up the robot.

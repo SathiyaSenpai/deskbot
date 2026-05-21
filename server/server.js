@@ -2,7 +2,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import path from 'path';
-import os from 'os'; // <--- FIXED: Import 'os' at the top level
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { textToSpeech, chat, detectEmotion } from './ai-services.js'; 
 
@@ -44,9 +44,6 @@ app.use(express.json());
 let robotWs = null;
 let controllers = new Set(); 
 
-// ============================================================================
-// PROXIMITY GREETING - Natural, randomized cooldown for realistic interaction
-// ============================================================================
 let lastGreetingTime = 0;
 let greetingCooldown = 25000; // Initial cooldown 25s
 

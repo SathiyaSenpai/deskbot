@@ -40,8 +40,10 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
 
  *  Open your `src/config file`
 
- *  Update the Wi-Fi name and password to match your mobile hotspot.
+ *  Update the Wi-Fi Name and password to match your mobile hotspot.
 
+ *  Also update you inet address to WS_HOST (You can find you inet address by running `ifconfig` in termux)
+  
  *  Open `server/public/ai-services.js`
 
  *  Insert your API key into the required field.
@@ -49,7 +51,9 @@ A fully autonomous AI desktop companion robot powered by ESP32 and a Mobile Node
 ## 🚀 How to Run (Termux)
 1.  Install Termux on Android.
 2.  Run `pkg install nodejs`
-3.  Clone this repo.
-4.  Go to server folder `cd server`
-5.  Run `node server.js`
-6.  Turn on Hotspot and power up the robot.
+3.  Run `npm -v` to check npm
+4. `npm install express`
+5.  Clone this repo.
+6.  Go to server folder `cd server`
+7.  Run `node server.js`
+8.  Turn on Hotspot and power up the robot.

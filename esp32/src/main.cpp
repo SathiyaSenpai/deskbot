@@ -642,38 +642,65 @@ void loop() {
     if (d.distance_mm > 0) prevDistance_mm = d.distance_mm;
     previousMotionState = d.motion;
 
-    // 4. MICROPHONE & VOICE STREAMING (Time-multiplexed)
+    // 4. MICROPHONE & VOICE STREAMING (Time-multiplexed & Dynamic SNR VAD)
     #if ENABLE_MICROPHONE
     bool isAudioPlaying = audioMgr.getIsPlaying();
     if (isAudioPlaying) {
       // Ensure mic is uninstalled while speaker plays to save DMA RAM & avoid feedback
       if (micMgr.isReady()) micMgr.stopRecording();
-    } else if (!servoIsMoving && (now - lastVolumeTrigger > 1500)) {
+    } else if (!servoIsMoving) {
       int vol = micMgr.getLoudness();
-      if (vol > MIC_VAD_THRESHOLD) {
-        startBehavior("listening", now);
-        activityDetected = true;
-        lastVolumeTrigger = now;
-        
-        // Stream audio chunk to websocket if connected
-        if (robotWs.isConnected() && micMgr.isReady()) {
-          uint8_t pcmBuf[256];
-          size_t bytesRead = micMgr.readChunk(pcmBuf, sizeof(pcmBuf));
-          if (bytesRead > 0) {
-            robotWs.sendAudioChunk(pcmBuf, bytesRead);
-          }
-        }
-      } 
-      else if (vol > VOLUME_THRESHOLD_LOW) {
-        startBehavior("listening", now);
-        activityDetected = true;
-        lastVolumeTrigger = now;
+      
+      // Dynamic Background Noise Floor Tracking (Non-blocking EMA)
+      static float adaptiveNoiseFloor = 15.0f;
+      static unsigned long lastVadTriggerTime = 0;
+      static unsigned long vadRefractoryWindow = 0;
+      
+      // Smoothly track background noise floor when not actively listening
+      if (vol < adaptiveNoiseFloor + 6) {
+        adaptiveNoiseFloor = (0.96f * adaptiveNoiseFloor) + (0.04f * vol);
+      } else if (now - lastVadTriggerTime > 12000) {
+        // Slow upward drift if quiet for a long time to adapt to ambient AC/fan noise
+        adaptiveNoiseFloor = (0.995f * adaptiveNoiseFloor) + (0.005f * vol);
       }
+      if (adaptiveNoiseFloor < 5.0f) adaptiveNoiseFloor = 5.0f;
+      if (adaptiveNoiseFloor > 50.0f) adaptiveNoiseFloor = 50.0f;
+      
+      // Dynamic SNR (Signal-to-Noise Ratio) Threshold: +15dB/units above ambient baseline
+      int dynamicVadThreshold = (int)adaptiveNoiseFloor + 15;
+      if (dynamicVadThreshold < VOLUME_THRESHOLD_LOW) dynamicVadThreshold = VOLUME_THRESHOLD_LOW;
+      
+      // Priority Check: Only evaluate VAD if NO pending touch, NO touch refractory, and NO intimate proximity intrusion (<15cm)
+      bool touchPriorityActive = pendingTouchReaction || (now - lastTouchTime < touchRefractoryWindow) || d.touchHead || d.touchSide;
+      bool intimateProximityActive = (now - lastSpatialTriggerTime < spatialRefractoryWindow) && (d.distance_mm > 0 && d.distance_mm < 150);
+      
+      if (!touchPriorityActive && !intimateProximityActive && (now - lastVolumeTrigger > 300)) {
+        if (vol > dynamicVadThreshold && (now - lastVadTriggerTime > vadRefractoryWindow)) {
+          lastVadTriggerTime = now;
+          lastVolumeTrigger = now;
+          vadRefractoryWindow = random(4000, 7000); // 4-7s attention span
+          activityDetected = true;
+          
+          Serial.printf("\n[MIC-VAD] Voice detected! Vol: %d (NoiseFloor: %.1f, Thr: %d) -> 'listening' (Refractory: %lu ms)\n", 
+                        vol, adaptiveNoiseFloor, dynamicVadThreshold, vadRefractoryWindow);
+          startBehavior("listening", now);
+        }
+      }
+      
+      // Stream audio chunk to websocket if connected
+      if (robotWs.isConnected() && micMgr.isReady() && (now - lastVolumeTrigger < 4000)) {
+        uint8_t pcmBuf[256];
+        size_t bytesRead = micMgr.readChunk(pcmBuf, sizeof(pcmBuf));
+        if (bytesRead > 0) {
+          robotWs.sendAudioChunk(pcmBuf, bytesRead);
+        }
+      }
+      
       if (vol > 20) leds.voiceReact(vol); // Voice visual reaction
     }
     #endif
 
-    // 5. Reset sleep timers
+    // 5. Reset sleep timers on activity
     if (activityDetected) {
       lastInteractionTime = now;
       inSleepMode = false;
@@ -694,15 +721,65 @@ void loop() {
       Serial.printf("[IDLE] Autonomous eye movement to %d°\n", randomAngle);
     }
 
-    // 6. DARKNESS LOGIC
-    if (now - lastInteractionTime > 15000) { 
-      if (d.light > 3000) { 
-         if (!inDarkSleepMode) { 
-           startBehavior("sleeping", now);
-         }
-      } 
-      else if (inDarkSleepMode) {
-         startBehavior("calm_idle", now);
+    // 7. CIRCADIAN LIGHT & ADAPTIVE IDLE DROWSINESS CASCADE
+    static float emaLight = 0.0f;
+    static bool isDrowsyState = false;
+    static unsigned long drowsyStartTime = 0;
+    static unsigned long nextDrowsyGlanceTime = 0;
+    
+    // Smooth LDR readings with Exponential Moving Average (eliminates shadow flickers)
+    if (emaLight == 0.0f) emaLight = (float)d.light;
+    else emaLight = (0.88f * emaLight) + (0.12f * (float)d.light);
+    
+    // Check priority: Do not evaluate drowsiness if touch/interaction occurred recently
+    bool priorityActive = pendingTouchReaction || (now - lastTouchTime < touchRefractoryWindow) || activityDetected;
+    if (priorityActive) {
+      isDrowsyState = false;
+      drowsyStartTime = 0;
+    } else {
+      // Stage 1: Progressive Drowsiness transition
+      unsigned long idleTime = now - lastInteractionTime;
+      unsigned long sleepDelay = PRESENTATION_MODE ? (IDLE_TO_SLEEPY_DELAY * 3) : IDLE_TO_SLEEPY_DELAY; // 60s in presentation mode
+      
+      if (!inSleepMode && !inDarkSleepMode && !isDrowsyState && activeBehavior && strcmp(activeBehavior->name, "calm_idle") == 0) {
+        if ((idleTime > sleepDelay) || (idleTime > 12000 && emaLight > 2600.0f)) {
+          isDrowsyState = true;
+          drowsyStartTime = now;
+          Serial.printf("\n[CIRCADIAN-CASCADE] Drowsiness triggered (EMA Light: %.1f, Idle: %lums) -> 'sleepy_idle'\n", emaLight, idleTime);
+          startBehavior("sleepy_idle", now);
+        }
+      }
+      
+      // Stage 2: Deep Sleep Transition (after 10-15s in Stage 1)
+      if (isDrowsyState && !inDarkSleepMode && !inSleepMode) {
+        if (now - drowsyStartTime > random(10000, 15000)) {
+          if (emaLight > 2800.0f || idleTime > (sleepDelay + 15000)) {
+            Serial.printf("\n[CIRCADIAN-CASCADE] Deep sleep confirmed (EMA Light: %.1f) -> 'sleeping'\n", emaLight);
+            startBehavior("sleeping", now);
+            inDarkSleepMode = (emaLight > 2800.0f);
+            inSleepMode = true;
+            nextDrowsyGlanceTime = now + random(45000, 90000);
+          }
+        }
+      }
+      
+      // Stage 3: Circadian Awakening with Hysteresis (< 2200 wakes up from 2600/2800 sleep)
+      if (inDarkSleepMode || inSleepMode || isDrowsyState) {
+        if (emaLight < 2200.0f && (now - lastInteractionTime > 5000)) {
+          Serial.printf("\n[CIRCADIAN-CASCADE] Bright ambient light detected (EMA Light: %.1f < 2200) -> Awakening ('wake_up')\n", emaLight);
+          startBehavior("wake_up", now);
+          inDarkSleepMode = false;
+          inSleepMode = false;
+          isDrowsyState = false;
+          lastInteractionTime = now;
+        }
+      }
+      
+      // Stage 4: Periodic Sleep Stir during deep sleep
+      if (inDarkSleepMode && now > nextDrowsyGlanceTime) {
+        Serial.printf("\n[CIRCADIAN-CASCADE] Periodic sleep stir -> 'sleepy_idle'\n");
+        startBehavior("sleepy_idle", now);
+        nextDrowsyGlanceTime = now + random(60000, 120000);
       }
     }
     
@@ -720,20 +797,6 @@ void loop() {
   bool audioPlaying = audioMgr.getIsPlaying();
   if (audioPlaying) {
     lastInteractionTime = now; // Reset idle timer while audio plays
-  }
-  
-  if (now - lastIdleCheckTime > 1000) {
-    lastIdleCheckTime = now;
-    unsigned long idleTime = now - lastInteractionTime;
-    unsigned long sleepDelay = PRESENTATION_MODE ? (IDLE_TO_SLEEPY_DELAY * 3) : IDLE_TO_SLEEPY_DELAY; // 60 sec in presentation mode
-    
-    // Don't go to sleep if audio is playing
-    if (!audioPlaying && !inDarkSleepMode && activeBehavior && idleTime > sleepDelay && !inSleepMode) {
-      if (strcmp(activeBehavior->name, "sleepy_idle") != 0 && 
-          strcmp(activeBehavior->name, "sleeping") != 0) {
-        startBehavior("sleepy_idle", now);
-      }
-    }
   }
   
   // 5. AUTO-RETURN (FIXED MATH)

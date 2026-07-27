@@ -74,6 +74,10 @@ public:
     return lastTemperature_;
   }
 
+  float getCachedTemperature() const {
+    return lastTemperature_;
+  }
+
   void syncTime(int year, int month, int day, int hour, int minute, int second) {
     if (!rtcFound_) {
       Serial.println(F("[RTC] Cannot sync time - DS3231 not found"));

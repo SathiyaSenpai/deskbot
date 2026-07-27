@@ -433,6 +433,9 @@ void loop() {
   bool inSleepState = inSleepMode || inDarkSleepMode;
   sensors.update(inSleepState); // Slower interval in sleep mode, but still reads
   
+  // Update RTC temperature cache non-blockingly (at most once every 5s internally)
+  rtcMgr.getTemperature();
+  
   // Check DS3231 Hardware Alarm
   rtcMgr.checkAlarm();
   if (rtcMgr.isAlarmTriggered()) {
@@ -504,7 +507,7 @@ void loop() {
   unsigned long sensorInterval = inSleepState ? 5000 : (PRESENTATION_MODE ? 200 : 100);
   if (now - lastSensor > sensorInterval) {
     lastSensor = now;
-    SensorData d = sensors.read(rtcMgr.getTemperature()); // Always read sensors with DS3231 temp
+    SensorData d = sensors.read(rtcMgr.getCachedTemperature()); // Uses non-blocking cached temp
     bool activityDetected = false;
     bool servoIsMoving = servo.isMoving();
     

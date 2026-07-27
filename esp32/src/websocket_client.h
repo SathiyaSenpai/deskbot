@@ -64,9 +64,8 @@ private:
   }
 
   void handleMessage(uint8_t* payload, size_t len) {
-    // Static avoids repeated stack allocation in callback context
-    static JsonDocument doc;
-    doc.clear();
+    // Local stack JsonDocument automatically frees heap allocations upon function exit in ArduinoJson 7
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload, len);
     if (err) {
       Serial.printf("[WS] JSON parse error: %s\n", err.c_str());
@@ -193,8 +192,7 @@ public:
   void sendStatus(const char* event, const char* detail) {
     if (!connected) return;
     
-    static JsonDocument doc;
-    doc.clear();
+    JsonDocument doc;
     doc["type"] = "robot_status";
     doc["event"] = event;
     doc["detail"] = detail;
@@ -207,8 +205,7 @@ public:
   void sendSensors(const SensorData& s) {
     if (!connected) return;
     
-    static JsonDocument doc;
-    doc.clear();
+    JsonDocument doc;
     doc["type"] = "sensor_data";
     doc["light"] = s.light;
     doc["motion"] = s.motion;

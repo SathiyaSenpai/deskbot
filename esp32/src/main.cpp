@@ -471,13 +471,15 @@ void loop() {
   static bool previousMotionState = false;
   static unsigned long lastIdleMovement = 0;
   
-  // DYNAMIC MOTION DYNAMICS STATE
-  static unsigned long lastMotionTriggerTime = 0;
-  static unsigned long motionRefractoryWindow = 0;
+  // DYNAMIC MOTION & SPATIAL DYNAMICS STATE
+  static unsigned long lastSpatialTriggerTime = 0;
+  static unsigned long spatialRefractoryWindow = 0;
   static unsigned long nextPresenceGlanceTime = 0;
   static bool motionPresenceActive = false;
   static unsigned long motionStartTime = 0;
   static unsigned long lastMotionHighTime = 0;
+  static uint16_t prevDistance_mm = 0;
+  static unsigned long nextDistanceJitterInterval = 200; // Randomized sampling 180-320ms
   
   // DYNAMIC TOUCH DYNAMICS STATE
   static unsigned long lastTouchTime = 0;
@@ -563,7 +565,7 @@ void loop() {
       webBehaviorActive = false;
     }
 
-    // 2. DYNAMIC PIR MOTION DYNAMICS
+    // 2. UNIFIED SPATIAL & PROXIMITY ENGINE (PIR + ULTRASONIC FUSION)
     if (d.motion) {
       lastMotionHighTime = now;
     }
@@ -576,55 +578,66 @@ void loop() {
     } else if (!d.motion && motionPresenceActive) {
       if (now - lastMotionHighTime > 15000) { // 15s departure confirmation window
         motionPresenceActive = false;
-        Serial.println(F("[MOTION-DYNAMICS] Person departed (15s no motion)"));
+        Serial.println(F("[SPATIAL-ENGINE] Person departed (15s no motion)"));
       }
     }
 
     bool isNewArrival = motionPresenceActive && !wasMotionPresent;
     bool isPresenceGlanceDue = motionPresenceActive && wasMotionPresent && (now >= nextPresenceGlanceTime);
 
-    // NON-CONFLICT SAFEGUARD: Motion MUST NOT override touch sensing, touch refractory windows, or web commands!
-    bool touchActiveOrRefractory = (pendingTouchReaction || (now - lastTouchTime < touchRefractoryWindow));
-    bool allowMotionTrigger = allowSensorTrigger && !touchActiveOrRefractory;
+    // Calculate rapid approach velocity (>100mm drop in <400ms)
+    bool isRapidApproach = false;
+    if (prevDistance_mm > 0 && d.distance_mm > 0 && d.distance_mm < prevDistance_mm) {
+      uint16_t distDrop = prevDistance_mm - d.distance_mm;
+      if (distDrop >= 100 && d.distance_mm < 450) {
+        isRapidApproach = true;
+      }
+    }
 
-    if (allowMotionTrigger && (now - lastMotionTriggerTime >= motionRefractoryWindow)) {
-      if (isNewArrival) {
-        lastMotionTriggerTime = now;
-        motionRefractoryWindow = random(4000, 8000); // 4 to 8 second arrival refractory
-        const char* arrivalBehavior = (random(0, 2) == 0) ? "curious_idle" : "surprised";
-        Serial.printf("\n[MOTION-DYNAMICS] New arrival -> '%s' (Refractory: %lu ms)\n", 
-                      arrivalBehavior, motionRefractoryWindow);
-        startBehavior(arrivalBehavior, now);
+    // Determine Hysteresis Distance Zones (150mm intimate, 450mm personal)
+    bool isIntimateZone = (d.distance_mm > 0 && d.distance_mm < 150);
+    bool isPersonalZone = (d.distance_mm >= 150 && d.distance_mm <= 450);
+
+    // NON-CONFLICT SAFEGUARD: Spatial engine MUST NOT override physical touch or web UI commands!
+    bool touchActiveOrRefractory = (pendingTouchReaction || (now - lastTouchTime < touchRefractoryWindow));
+    bool allowSpatialTrigger = allowSensorTrigger && !touchActiveOrRefractory;
+
+    if (allowSpatialTrigger && (now - lastSpatialTriggerTime >= spatialRefractoryWindow)) {
+      if (isRapidApproach || (isIntimateZone && d.motion)) {
+        // INTIMATE / INTRUSION / RAPID APPROACH ZONE (<15cm or fast object)
+        lastSpatialTriggerTime = now;
+        spatialRefractoryWindow = random(4000, 7000); // 4-7 second cool-down
+        const char* intrusionBehavior = (random(0, 2) == 0) ? "surprised" : "confused";
+        Serial.printf("\n[SPATIAL-ENGINE] Intimate Zone / Rapid Approach (%dmm) -> '%s' (Refractory: %lu ms)\n", 
+                      d.distance_mm, intrusionBehavior, spatialRefractoryWindow);
+        startBehavior(intrusionBehavior, now);
         activityDetected = true;
-      } 
+      }
+      else if (isNewArrival || (isPersonalZone && d.motion && (!activeBehavior || strcmp(activeBehavior->name, "calm_idle") == 0))) {
+        // PERSONAL INTERACTION ZONE (15cm - 45cm) OR NEW ARRIVAL
+        lastSpatialTriggerTime = now;
+        spatialRefractoryWindow = random(3500, 6000); // 3.5-6 second window
+        const char* interactionBehavior = d.touchSide ? "shy_happy" : "curious_idle";
+        Serial.printf("\n[SPATIAL-ENGINE] Personal Zone / Arrival (%dmm) -> '%s' (Refractory: %lu ms)\n", 
+                      d.distance_mm, interactionBehavior, spatialRefractoryWindow);
+        startBehavior(interactionBehavior, now);
+        activityDetected = true;
+      }
       else if (isPresenceGlanceDue && activeBehavior && strcmp(activeBehavior->name, "calm_idle") == 0) {
-        lastMotionTriggerTime = now;
+        // AMBIENT PRESENCE GLANCE (Person nearby)
+        lastSpatialTriggerTime = now;
         nextPresenceGlanceTime = now + random(20000, 45000); // Schedule next glance 20-45s later
-        motionRefractoryWindow = random(3000, 6000);
-        Serial.printf("\n[MOTION-DYNAMICS] Presence glance -> 'curious_idle' (Next glance in %lu ms)\n", 
+        spatialRefractoryWindow = random(3000, 5000);
+        Serial.printf("\n[SPATIAL-ENGINE] Presence glance -> 'curious_idle' (Next glance in %lu ms)\n", 
                       nextPresenceGlanceTime - now);
         startBehavior("curious_idle", now);
         activityDetected = true;
       }
     }
     
-    previousMotionState = d.motion; // Update raw motion state for debugging
-    
-    // 3. DISTANCE (crowd-proof ranges)
-    if (allowSensorTrigger && d.distance_mm > DISTANCE_MIN && d.distance_mm < (DISTANCE_MIN + 50)) {
-      if (!activeBehavior || strcmp(activeBehavior->name, "surprised") != 0) {
-        Serial.printf("\n[DISTANCE] Close: %dmm (crowd-proof)\n", d.distance_mm);
-        startBehavior("surprised", now);
-      }
-      activityDetected = true;
-    } 
-    else if (allowSensorTrigger && d.distance_mm > (DISTANCE_MIN + 50) && d.distance_mm < DISTANCE_MAX) {
-      if (!activeBehavior || strcmp(activeBehavior->name, "curious_idle") != 0) {
-        Serial.printf("\n[DISTANCE] Medium: %dmm (crowd-proof)\n", d.distance_mm);
-        startBehavior("curious_idle", now);
-      }
-      activityDetected = true;
-    }
+    // Update distance history and apply dynamic sampling jitter (180ms - 320ms)
+    if (d.distance_mm > 0) prevDistance_mm = d.distance_mm;
+    previousMotionState = d.motion;
 
     // 4. MICROPHONE & VOICE STREAMING (Time-multiplexed)
     #if ENABLE_MICROPHONE

@@ -36,6 +36,7 @@ class RobotWebSocket {
 private:
   WebSocketsClient ws;
   bool connected = false;
+  bool pendingConnectStatus = false;
   String serverHost;
   int serverPort;
   QueueHandle_t messageQueue = NULL;
@@ -50,7 +51,7 @@ private:
       case WStype_CONNECTED:
         Serial.printf("[WS] Connected to %s\n", (char*)payload);
         connected = true;
-        sendStatus("connect", "online");
+        pendingConnectStatus = true; // Defer sending status to loop() outside callback context
         break;
         
       case WStype_TEXT:
@@ -174,7 +175,13 @@ public:
     ws.enableHeartbeat(20000, 5000, 3);
   }
 
-  void loop() { ws.loop(); }
+  void loop() { 
+    ws.loop(); 
+    if (connected && pendingConnectStatus) {
+      pendingConnectStatus = false;
+      sendStatus("connect", "online");
+    }
+  }
   bool isConnected() { return connected; }
 
   // Get next message from queue (non-blocking)

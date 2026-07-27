@@ -354,12 +354,14 @@ void setup() {
   Serial.println("  NISYA COMPANION - FINAL FIX");
   Serial.println("========================================\n");
 
-  Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+  // NOTE: Wire is initialized inside rtcMgr.begin() with correct pins.
+  // Do NOT call Wire.begin() separately — calling it twice corrupts the ESP32 I2C
+  // driver mutex (_impl pointer), causing a LoadProhibited crash on next I2C access.
+  rtcMgr.begin(PIN_I2C_SDA, PIN_I2C_SCL); // Initializes Wire once, then DS3231
   display.begin();
   leds.begin();
   servo.begin();
   sensors.begin();
-  rtcMgr.begin();
   #if ENABLE_MICROPHONE
   micMgr.begin();
   #endif

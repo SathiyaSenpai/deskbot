@@ -28,11 +28,19 @@ private:
   int lastAlarmTriggerMinute_ = -1; // Prevents re-triggering in the same minute
   
 public:
-  void begin() {
+  void begin(int sda = -1, int scl = -1) {
     Serial.println(F("[RTC] Initializing DS3231 hardware module..."));
     
-    // Attempt to initialize DS3231 on I2C bus (SDA=21, SCL=22)
-    if (!rtc_.begin(&Wire)) {
+    // Initialize Wire once with custom pins BEFORE RTClib's Adafruit_I2CDevice does it
+    // RTClib internally calls Wire.begin() again which corrupts the ESP32 I2C mutex
+    // if Wire was already initialized. We pass pins here so Wire.begin() is only ever
+    // called once with the correct pins.
+    if (sda >= 0 && scl >= 0) {
+      Wire.begin(sda, scl);
+    }
+    
+    // Attempt to initialize DS3231 — RTClib takes ownership of Wire from here
+    if (!rtc_.begin()) {
       Serial.println(F("[RTC] ERROR: Couldn't find DS3231 RTC module on I2C!"));
       rtcFound_ = false;
     } else {

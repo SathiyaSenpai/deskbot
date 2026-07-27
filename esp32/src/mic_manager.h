@@ -24,8 +24,7 @@ public:
     #endif
     initialized = false;
     isRecordingState = false;
-    startRecording(); // Install driver ONCE at boot to prevent heap fragmentation!
-    Serial.println(F("[MIC] Ready and initialized at boot"));
+    Serial.println(F("[MIC] Ready (on-demand mode — driver installs after WiFi init to prevent boot crash)"));
   }
 
   bool startRecording() {

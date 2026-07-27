@@ -38,6 +38,12 @@ function cleanTextForTTS(text) {
     .trim() || 'Hello';
 }
 
+const EXT_AI_ROOT = fs.existsSync('/mnt/new_volume/deskbot')
+  ? '/mnt/new_volume/deskbot'
+  : (fs.existsSync(`/run/media/${process.env.USER || 'sathya'}/New Volume/deskbot`)
+      ? `/run/media/${process.env.USER || 'sathya'}/New Volume/deskbot`
+      : null);
+
 export const AI_CONFIG = {
   preferredLanguage: 'en',
 
@@ -49,17 +55,17 @@ export const AI_CONFIG = {
   },
 
   whisper: {
-    binary: process.env.WHISPER_BIN || 'whisper-cpp',
+    binary: process.env.WHISPER_BIN || (fs.existsSync('/usr/bin/whisper-cli') ? '/usr/bin/whisper-cli' : 'whisper-cli'),
     model: process.env.WHISPER_MODEL_PATH ||
-           path.join(process.env.HOME || '/home/sathya', '.cache/whisper/ggml-medium.en.bin'),
+           (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'whisper/ggml-medium.en.bin') : path.join(process.env.HOME || '/home/sathya', '.cache/whisper/ggml-medium.en.bin')),
     language: 'en',
   },
 
   kokoro: {
     modelFile: process.env.KOKORO_MODEL ||
-               path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/kokoro-v1.0.onnx'),
+               (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'kokoro/kokoro-v1.0.onnx') : path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/kokoro-v1.0.onnx')),
     voicesFile: process.env.KOKORO_VOICES ||
-                path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/voices-v1.0.bin'),
+                (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'kokoro/voices-v1.0.bin') : path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/voices-v1.0.bin')),
     voice: process.env.KOKORO_VOICE || 'af_heart',
     speed: 1.05,
     lang: 'en-us',
@@ -68,7 +74,7 @@ export const AI_CONFIG = {
 
   piper: {
     modelDir: process.env.PIPER_MODEL_DIR ||
-              path.join(process.env.HOME || '/home/sathya', '.local/share/piper'),
+              (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'piper') : path.join(process.env.HOME || '/home/sathya', '.local/share/piper')),
     tamilModel: process.env.PIPER_TAMIL_MODEL || 'ta_IN-roja-medium',
     executable: process.env.PIPER_BIN || 'piper',
   },

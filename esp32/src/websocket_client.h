@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
+#include <ESPmDNS.h>
+#include <WiFiUdp.h>
 #include "config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -142,6 +144,49 @@ private:
     }
   }
 
+  String discoverServerIP() {
+    WiFiUDP udp;
+    if (!udp.begin(3001)) return "";
+
+    IPAddress localIP = WiFi.localIP();
+    IPAddress subnetBroadcast = localIP;
+    subnetBroadcast[3] = 255; // Subnet directed broadcast (e.g. 10.250.209.255)
+
+    Serial.printf("[UDP Auto-Discovery] Broadcasting query to 255.255.255.255 and %s:3001...\n", subnetBroadcast.toString().c_str());
+
+    for (int attempt = 0; attempt < 4; attempt++) {
+      // 1. General broadcast
+      udp.beginPacket(IPAddress(255, 255, 255, 255), 3001);
+      udp.print("DISCOVER_DESKBOT");
+      udp.endPacket();
+
+      // 2. Directed subnet broadcast (fixes lwIP socket filtering on Android Hotspots)
+      udp.beginPacket(subnetBroadcast, 3001);
+      udp.print("DISCOVER_DESKBOT");
+      udp.endPacket();
+
+      unsigned long start = millis();
+      while (millis() - start < 450) {
+        int packetSize = udp.parsePacket();
+        if (packetSize > 0) {
+          char reply[64] = {0};
+          udp.read(reply, 63);
+          String repStr = String(reply);
+          if (repStr.startsWith("DESKBOT_SERVER:")) {
+            IPAddress remoteIP = udp.remoteIP();
+            Serial.printf("[UDP Auto-Discovery] SUCCESS! Server found at IP: %s\n", remoteIP.toString().c_str());
+            udp.stop();
+            return remoteIP.toString();
+          }
+        }
+        delay(10);
+      }
+    }
+    udp.stop();
+    Serial.println(F("[UDP Auto-Discovery] Broadcast timeout. Falling back to mDNS / Config IP..."));
+    return "";
+  }
+
 public:
   void setServer(const char* host, int port) {
     serverHost = host;
@@ -164,9 +209,30 @@ public:
     const char* host = serverHost.length() > 0 ? serverHost.c_str() : WS_HOST;
     int port = serverPort > 0 ? serverPort : WS_PORT;
 
-    Serial.printf("[WS] Connecting to %s:%d%s\n", host, port, WS_PATH);
+    String resolvedHost = host;
+
+    // 1. Try UDP Auto-Discovery Broadcast first (Instant & Works on all Android Hotspots)
+    String discoveredIP = discoverServerIP();
+    if (discoveredIP.length() > 0) {
+      resolvedHost = discoveredIP;
+    }
+    else if (String(host).endsWith(".local")) {
+      MDNS.begin("nisya-companion");
+      String mname = String(host);
+      mname.replace(".local", "");
+      Serial.printf("[mDNS] Querying host: %s.local...\n", mname.c_str());
+      IPAddress ip = MDNS.queryHost(mname);
+      if (ip != IPAddress(0, 0, 0, 0)) {
+        resolvedHost = ip.toString();
+        Serial.printf("[mDNS] Resolved %s.local -> %s\n", host, resolvedHost.c_str());
+      } else {
+        Serial.printf("[mDNS] Resolution failed for %s\n", host);
+      }
+    }
+
+    Serial.printf("[WS] Connecting to %s:%d%s\n", resolvedHost.c_str(), port, WS_PATH);
     
-    ws.begin(host, port, WS_PATH);
+    ws.begin(resolvedHost.c_str(), port, WS_PATH);
     ws.onEvent([this](WStype_t type, uint8_t* payload, size_t len) {
       handleEvent(type, payload, len);
     });

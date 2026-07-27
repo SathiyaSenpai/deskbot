@@ -6,6 +6,7 @@
 #include <Preferences.h>
 #include <DNSServer.h>
 #include <esp_task_wdt.h>
+#include <ESPmDNS.h>
 #include "config.h"
 
 // HTML string stored in PROGMEM (Flash memory) to save DRAM
@@ -19,7 +20,7 @@ input[type=submit]{background:#00d4ff;color:#000;font-weight:bold;cursor:pointer
 <form action='/save' method='POST'>
 WiFi SSID:<input name='ssid' required><br>
 Password:<input name='pass' type='password'><br>
-Server IP:<input name='ip' value='10.121.79.219'><br>
+Server IP:<input name='ip' value='deskbot.local'><br>
 Server Port:<input name='port' type='number' value='3000'><br>
 <input type='submit' value='Save & Restart'>
 </form></div></body></html>
@@ -51,6 +52,10 @@ public:
         savedSSID = prefs.getString("ssid", "");
         savedPassword = prefs.getString("pass", "");
         serverIP = prefs.getString("ip", WS_HOST);
+        if (serverIP == "10.121.79.219" || serverIP == "10.118.223.125" || serverIP.length() == 0) {
+            serverIP = WS_HOST;
+            prefs.putString("ip", serverIP);
+        }
         serverPort = prefs.getInt("port", WS_PORT);
         
         // Fallback to config.h if NVS empty
@@ -84,6 +89,7 @@ public:
         
         if (WiFi.status() == WL_CONNECTED) {
             Serial.printf("\n[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+            MDNS.begin("nisya-companion");
             return true;
         }
         

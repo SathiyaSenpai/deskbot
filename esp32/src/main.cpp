@@ -508,6 +508,15 @@ void loop() {
   if (now - lastSensor > sensorInterval) {
     lastSensor = now;
     SensorData d = sensors.read(rtcMgr.getCachedTemperature()); // Uses non-blocking cached temp
+    
+    // Stream live sensor readings to server & web dashboard
+    static unsigned long lastSensorSendTime = 0;
+    unsigned long sensorSendRate = inSleepState ? 2000 : 300;
+    if (robotWs.isConnected() && (now - lastSensorSendTime > sensorSendRate)) {
+      robotWs.sendSensors(d);
+      lastSensorSendTime = now;
+    }
+
     bool activityDetected = false;
     bool servoIsMoving = servo.isMoving();
     
@@ -779,16 +788,7 @@ void loop() {
       if (inDarkSleepMode && now > nextDrowsyGlanceTime) {
         Serial.printf("\n[CIRCADIAN-CASCADE] Periodic sleep stir -> 'sleepy_idle'\n");
         startBehavior("sleepy_idle", now);
-        nextDrowsyGlanceTime = now + random(60000, 120000);
       }
-    }
-    
-    // RESTART FIX: Send sensors less frequently during sleep (every 2 sec instead of 200ms)
-    static unsigned long lastSensorSend = 0;
-    unsigned long sensorSendInterval = (inSleepMode || inDarkSleepMode) ? 2000 : 500;
-    if (robotWs.isConnected() && (now - lastSensorSend > sensorSendInterval)) {
-      robotWs.sendSensors(d);
-      lastSensorSend = now;
     }
   }
   

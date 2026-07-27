@@ -4,6 +4,7 @@ import http from 'http';
 import path from 'path';
 import os from 'os';
 import multer from 'multer';
+import dgram from 'dgram';
 import { fileURLToPath } from 'url';
 import { textToSpeech, speechToText, chat, detectEmotion, setLanguage } from './ai-services.js';
 
@@ -22,21 +23,56 @@ app.use((req, res, next) => {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server }); 
 
-// Helper to find local IP
+// Helper to find local physical network IP (prioritizes Wi-Fi wlan/wlp over USB tethering)
 function getServerIP() {
-    const interfaces = os.networkInterfaces(); // Uses the imported 'os' module
+    const interfaces = os.networkInterfaces();
+    let ethernetFallback = null;
+
     for (const name of Object.keys(interfaces)) {
+        if (name.toLowerCase().includes('tailscale') || 
+            name.toLowerCase().includes('docker') || 
+            name.toLowerCase().includes('vbox') || 
+            name.toLowerCase().includes('tun') || 
+            name.toLowerCase().includes('tap')) {
+            continue;
+        }
         for (const iface of interfaces[name]) {
             if (iface.family === 'IPv4' && !iface.internal) {
-                return iface.address;
+                if (name.toLowerCase().includes('wlan') || 
+                    name.toLowerCase().includes('wlp') || 
+                    name.toLowerCase().includes('wifi')) {
+                    return iface.address; // Returns Wi-Fi IP (10.250.209.236)
+                }
+                if (!ethernetFallback) ethernetFallback = iface.address;
             }
         }
     }
-    return 'localhost';
+    return ethernetFallback || 'localhost';
 }
 
 const SERVER_IP = getServerIP();
 console.log(`📡 Server IP: ${SERVER_IP}:${PORT}`);
+
+// UDP Auto-Discovery Service for ESP32 (Works on Android Hotspots & Dynamic Subnets)
+const UDP_PORT = 3001;
+const udpSocket = dgram.createSocket('udp4');
+
+udpSocket.on('message', (msg, rinfo) => {
+    const str = msg.toString();
+    if (str.includes('DISCOVER_DESKBOT')) {
+        const response = `DESKBOT_SERVER:${SERVER_IP}:${PORT}`;
+        udpSocket.send(Buffer.from(response), rinfo.port, rinfo.address, (err) => {
+            if (!err) {
+                console.log(`[UDP Discovery] ESP32 auto-discovered server at ${rinfo.address}:${rinfo.port} -> Replied: ${response}`);
+            }
+        });
+    }
+});
+
+udpSocket.bind(UDP_PORT, () => {
+    try { udpSocket.setBroadcast(true); } catch(e) {}
+    console.log(`📡 UDP Discovery Service running on port ${UDP_PORT}`);
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/audio', express.static(path.join(__dirname, 'audio'))); // Serve TTS audio files

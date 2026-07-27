@@ -17,8 +17,7 @@ public:
   }
 
   void setMood(const char* mood) {
-    // 1. Check if mood is actually changing (Optimization)
-    if (strcmp(mood, currentMood_) == 0) return;
+    if (strcmp(currentMood_, mood) == 0 && animMode_ != ANIM_FLASH_ONCE) return; // Guard against redundant re-settings
     
     // FLASH-ONCE FIX: Save previous mood before setting "surprised" so we can restore
     if (strcmp(mood, "surprised") == 0 || strcmp(mood, "startled") == 0) {

@@ -180,6 +180,12 @@ wss.on('connection', (ws, req) => {
         robotWs = ws;
         console.log(`✅ ROBOT CONNECTED!`);
         broadcast({ type: 'robot_status', state: 'ONLINE' });
+        
+        // Auto-sync accurate server time to DS3231 hardware RTC
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()} ${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+        console.log(`⏱️ Auto-syncing DS3231 RTC time: ${timestamp}`);
+        ws.send(JSON.stringify({ type: 'sync_time', timestamp: timestamp }));
     } 
     // 2. REGISTER WEB APP
     else {
@@ -325,6 +331,13 @@ wss.on('connection', (ws, req) => {
                 // Handle stopwatch commands
                 else if (msg.type === 'stopwatch_start' || msg.type === 'stopwatch_stop' || msg.type === 'stopwatch_reset') {
                     console.log(`⏱️ Stopwatch: ${msg.type}`);
+                    if (robotWs && robotWs.readyState === 1) {
+                        robotWs.send(JSON.stringify(msg));
+                    }
+                }
+                // Handle DS3231 RTC Alarm & Time Sync commands
+                else if (msg.type === 'set_alarm' || msg.type === 'dismiss_alarm' || msg.type === 'sync_time') {
+                    console.log(`⏰ RTC Command: ${msg.type}`, msg);
                     if (robotWs && robotWs.readyState === 1) {
                         robotWs.send(JSON.stringify(msg));
                     }

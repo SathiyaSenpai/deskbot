@@ -65,8 +65,12 @@
           <span class="info-value" id="sensorDistance">—</span>
         </div>
         <div class="info-item">
-          <span class="info-label">✋ Touch</span>
+          <span class="info-label">✋ Touch (Head/Side)</span>
           <span class="info-value" id="sensorTouch">—</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">🌡️ Temp (DS3231)</span>
+          <span class="info-value" id="sensorTemp">—</span>
         </div>
       </div>
       
@@ -82,6 +86,19 @@
             <button class="demo-btn" onclick="stopwatchStart()">▶️ Start</button>
             <button class="demo-btn" onclick="stopwatchStop()">⏸️ Stop</button>
             <button class="demo-btn" onclick="stopwatchReset()">🔄 Reset</button>
+          </div>
+        </div>
+
+        <!-- RTC Alarm -->
+        <div class="demo-section">
+          <label>⏰ DS3231 Alarm</label>
+          <div class="btn-row" style="margin-bottom: 8px;">
+            <input type="time" id="alarmTimeInput" class="alarm-input" value="12:00" style="padding: 6px; border-radius: 4px; border: 1px solid #ddd; font-family: monospace;">
+            <button class="demo-btn" onclick="setAlarm()">🔔 Set Alarm</button>
+          </div>
+          <div class="btn-row">
+            <button class="demo-btn" onclick="dismissAlarm()">🔕 Dismiss / Silence</button>
+            <button class="demo-btn" onclick="syncTimeNow()">🔄 Sync Time</button>
           </div>
         </div>
       </div>

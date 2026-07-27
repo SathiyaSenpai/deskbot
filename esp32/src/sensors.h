@@ -11,6 +11,7 @@ struct SensorData {
   bool touchHead = false;
   bool touchSide = false;
   int soundLevel = 0; 
+  float temperature = 0.0f;
 };
 
 class SensorManager {
@@ -44,25 +45,28 @@ public:
     }
   }
 
-  SensorData read() {
+  SensorData read(float rtcTemp = 0.0f) {
     SensorData d;
     
     // 1. Read ambient sensors (fast, non-blocking)
     d.light = analogRead(PIN_LDR);
     d.motion = digitalRead(PIN_PIR) == HIGH;
     
-    // 2. Read TOUCH with simpler verification
-    int touchHead = touchRead(PIN_TOUCH_HEAD);
-    int touchSide = touchRead(PIN_TOUCH_SIDE);
+    // 2. Read TOUCH with 2-sample debouncing for direct ESP32 jumper wire capacitance
+    int touchHead1 = touchRead(PIN_TOUCH_HEAD);
+    int touchSide1 = touchRead(PIN_TOUCH_SIDE);
+    delayMicroseconds(500); // Brief delay for sample consistency
+    int touchHead2 = touchRead(PIN_TOUCH_HEAD);
+    int touchSide2 = touchRead(PIN_TOUCH_SIDE);
     
-    d.touchHead = (touchHead < ROBOT_TOUCH_THRESHOLD);
-    d.touchSide = (touchSide < ROBOT_TOUCH_THRESHOLD);
+    d.touchHead = (touchHead1 < ROBOT_TOUCH_THRESHOLD) && (touchHead2 < ROBOT_TOUCH_THRESHOLD);
+    d.touchSide = (touchSide1 < ROBOT_TOUCH_THRESHOLD) && (touchSide2 < ROBOT_TOUCH_THRESHOLD);
     
 #if DEBUG_VERBOSE
     static unsigned long lastDebug = 0;
     if (millis() - lastDebug > 3000) {
-      Serial.printf("[TOUCH] Head: %d, Side: %d (threshold: %d)\n", 
-                    touchHead, touchSide, ROBOT_TOUCH_THRESHOLD);
+      Serial.printf("[TOUCH] Head: %d/%d, Side: %d/%d (threshold: %d)\n", 
+                    touchHead1, touchHead2, touchSide1, touchSide2, ROBOT_TOUCH_THRESHOLD);
       lastDebug = millis();
     }
 #endif
@@ -70,7 +74,9 @@ public:
     // 3. Use cached distance (updated by update() method)
     d.distance_mm = lastDistance_;
     
+    // 4. Set sound level and temperature
     d.soundLevel = 0; // Will be set separately if mic enabled
+    d.temperature = rtcTemp;
     return d;
   }
 

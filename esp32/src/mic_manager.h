@@ -22,15 +22,20 @@ public:
       Serial.println(F("[MIC] Disabled in config"));
       return;
     #endif
-    // Driver not installed at boot — installed on demand when needed
-    // This saves ~2-3 KB of DMA RAM until first voice activity
     initialized = false;
     isRecordingState = false;
-    Serial.println(F("[MIC] Ready (on-demand mode — driver installs on first use)"));
+    startRecording(); // Install driver ONCE at boot to prevent heap fragmentation!
+    Serial.println(F("[MIC] Ready and initialized at boot"));
   }
 
   bool startRecording() {
-    if (initialized) return true;
+    if (initialized) {
+      if (!isRecordingState) {
+        i2s_start(I2S_MIC_PORT);
+        isRecordingState = true;
+      }
+      return true;
+    }
 
     i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
@@ -73,24 +78,20 @@ public:
   }
 
   void stopRecording() {
-    if (initialized) {
-      i2s_driver_uninstall(I2S_MIC_PORT);
-      initialized = false;
+    if (initialized && isRecordingState) {
+      i2s_stop(I2S_MIC_PORT);
       isRecordingState = false;
-      Serial.println(F("[MIC] Driver uninstalled (freed DMA memory)"));
+      // Do NOT uninstall driver! Keeps DMA memory stable and prevents heap fragmentation crashes.
     }
   }
 
   int getLoudness() {
-    if (!initialized) {
-      // Install driver temporarily for this measurement
+    if (!initialized || !isRecordingState) {
       if (!startRecording()) return 0;
-      // Brief settle time for DMA buffers to fill (avoids bogus first reading)
-      delay(5);
     }
 
     size_t bytes_read = 0;
-    esp_err_t err = i2s_read(I2S_MIC_PORT, sampleBuffer, sizeof(sampleBuffer), &bytes_read, 20);
+    esp_err_t err = i2s_read(I2S_MIC_PORT, sampleBuffer, sizeof(sampleBuffer), &bytes_read, 10);
     if (err != ESP_OK || bytes_read == 0) return 0;
 
     uint64_t sum = 0;

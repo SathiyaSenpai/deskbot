@@ -95,6 +95,10 @@ public:
       setNote(0, 300, 300); setNote(1, 200, 400);
       sequenceLength = 2;
     }
+    else if (strcmp(name, "alarm") == 0) {
+      setNote(0, 2048, 150); setNote(1, 0, 100); setNote(2, 2048, 150); setNote(3, 0, 100); setNote(4, 2560, 300);
+      sequenceLength = 5;
+    }
   }
 
 private:
@@ -279,6 +283,27 @@ void processWebSocketMessage(const WsQueueMessage& msg) {
     case WS_MSG_STOPWATCH_RESET:
       rtcMgr.stopwatchReset();
       break;
+    case WS_MSG_SET_ALARM:
+      rtcMgr.setAlarm(msg.intValue, msg.intValue2);
+      if (robotWs.isConnected()) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Alarm set for %02d:%02d", msg.intValue, msg.intValue2);
+        robotWs.sendStatus("alarm_set", buf);
+      }
+      break;
+    case WS_MSG_DISMISS_ALARM:
+      rtcMgr.dismissAlarm();
+      if (robotWs.isConnected()) {
+        robotWs.sendStatus("alarm_dismissed", "Alarm dismissed");
+      }
+      break;
+    case WS_MSG_SYNC_TIME: {
+      int y = 2026, mo = 7, d = 27, h = 12, min = 0, sec = 0;
+      if (sscanf(msg.data, "%d-%d-%d %d:%d:%d", &y, &mo, &d, &h, &min, &sec) == 6) {
+        rtcMgr.syncTime(y, mo, d, h, min, sec);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -396,6 +421,21 @@ void loop() {
   bool inSleepState = inSleepMode || inDarkSleepMode;
   sensors.update(inSleepState); // Slower interval in sleep mode, but still reads
   
+  // Check DS3231 Hardware Alarm
+  rtcMgr.checkAlarm();
+  if (rtcMgr.isAlarmTriggered()) {
+    rtcMgr.dismissAlarm(); // Clear trigger flag
+    Serial.println("\n[ALARM] DS3231 ALARM RINGING!");
+    startBehavior("wake_up", now);
+    soundFx.play("alarm");
+    if (robotWs.isConnected()) {
+      robotWs.sendStatus("alarm_triggered", "DS3231 Alarm Ringing");
+    }
+    lastInteractionTime = now;
+    inSleepMode = false;
+    inDarkSleepMode = false;
+  }
+  
   // Update stopwatch display if running
   if (rtcMgr.isStopwatchRunning()) {
     int m, s, c;
@@ -429,7 +469,7 @@ void loop() {
   unsigned long sensorInterval = inSleepState ? 5000 : (PRESENTATION_MODE ? 200 : 100);
   if (now - lastSensor > sensorInterval) {
     lastSensor = now;
-    SensorData d = sensors.read(); // Always read sensors, including sleep mode (every 5s)
+    SensorData d = sensors.read(rtcMgr.getTemperature()); // Always read sensors with DS3231 temp
     bool activityDetected = false;
     bool servoIsMoving = servo.isMoving();
     

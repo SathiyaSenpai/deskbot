@@ -18,14 +18,18 @@ enum WsMessageType {
   WS_MSG_REQUEST_STATE,
   WS_MSG_STOPWATCH_START,
   WS_MSG_STOPWATCH_STOP,
-  WS_MSG_STOPWATCH_RESET
+  WS_MSG_STOPWATCH_RESET,
+  WS_MSG_SET_ALARM,
+  WS_MSG_DISMISS_ALARM,
+  WS_MSG_SYNC_TIME
 };
 
 // Queue message structure
 struct WsQueueMessage {
   WsMessageType type;
-  char data[128];      // For strings like behavior name, color, URL
-  int intValue;        // For integers like servo angle
+  char data[128];      // For strings like behavior name, color, URL, timestamp
+  int intValue;        // For integers like servo angle or alarm hour
+  int intValue2;       // For secondary integers like alarm minute
 };
 
 class RobotWebSocket {
@@ -59,8 +63,10 @@ private:
   }
 
   void handleMessage(uint8_t* payload, size_t len) {
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, payload);
+    // Static avoids repeated stack allocation in callback context
+    static JsonDocument doc;
+    doc.clear();
+    DeserializationError err = deserializeJson(doc, payload, len);
     if (err) {
       Serial.printf("[WS] JSON parse error: %s\n", err.c_str());
       return;
@@ -110,6 +116,21 @@ private:
     else if (strcmp(msgType, "stopwatch_reset") == 0) {
       qMsg.type = WS_MSG_STOPWATCH_RESET;
     }
+    else if (strcmp(msgType, "set_alarm") == 0) {
+      qMsg.type = WS_MSG_SET_ALARM;
+      qMsg.intValue = doc["hour"] | 0;
+      qMsg.intValue2 = doc["minute"] | 0;
+    }
+    else if (strcmp(msgType, "dismiss_alarm") == 0) {
+      qMsg.type = WS_MSG_DISMISS_ALARM;
+    }
+    else if (strcmp(msgType, "sync_time") == 0) {
+      qMsg.type = WS_MSG_SYNC_TIME;
+      const char* timestamp = doc["timestamp"];
+      if (timestamp) {
+        strncpy(qMsg.data, timestamp, 127);
+      }
+    }
     else {
       sendToQueue = false;
     }
@@ -134,8 +155,8 @@ public:
       messageQueue = NULL;
     }
 
-    // Create FreeRTOS queue for messages
-    messageQueue = xQueueCreate(6, sizeof(WsQueueMessage));
+    // Queue depth 8: handles burst of commands without dropping
+    messageQueue = xQueueCreate(8, sizeof(WsQueueMessage));
     if (messageQueue == NULL) {
       Serial.println(F("[WS] Failed to create message queue!"));
     }
@@ -165,29 +186,32 @@ public:
   void sendStatus(const char* event, const char* detail) {
     if (!connected) return;
     
-    JsonDocument doc;
+    static JsonDocument doc;
+    doc.clear();
     doc["type"] = "robot_status";
     doc["event"] = event;
     doc["detail"] = detail;
     
-    String output;
-    serializeJson(doc, output);
+    char output[128];
+    serializeJson(doc, output, sizeof(output));
     ws.sendTXT(output);
   }
 
   void sendSensors(const SensorData& s) {
     if (!connected) return;
     
-    JsonDocument doc;
+    static JsonDocument doc;
+    doc.clear();
     doc["type"] = "sensor_data";
     doc["light"] = s.light;
     doc["motion"] = s.motion;
     doc["distance_mm"] = s.distance_mm;
     doc["touch_head"] = s.touchHead;
     doc["touch_side"] = s.touchSide;
+    doc["temperature"] = s.temperature;
     
-    String output;
-    serializeJson(doc, output);
+    char output[192];
+    serializeJson(doc, output, sizeof(output));
     ws.sendTXT(output);
   }
 

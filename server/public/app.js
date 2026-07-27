@@ -15,6 +15,7 @@ const elements = {
   eyeRight: document.getElementById('eyeRight'),
   sensorDist: document.getElementById('sensorDistance'),
   sensorTouch: document.getElementById('sensorTouch'),
+  sensorTemp: document.getElementById('sensorTemp'),
   chat: document.getElementById('chatMessages'),
   input: document.getElementById('messageInput'),
   sendBtn: document.getElementById('sendButton'),
@@ -339,7 +340,17 @@ function updateSensors(data) {
     }
   }
   
-  if (elements.sensorTouch) elements.sensorTouch.innerText = data.touch_head ? 'Yes' : 'No';
+  if (elements.sensorTouch) {
+    if (data.touch_head && data.touch_side) elements.sensorTouch.innerText = 'Both';
+    else if (data.touch_head) elements.sensorTouch.innerText = 'Head';
+    else if (data.touch_side) elements.sensorTouch.innerText = 'Side';
+    else elements.sensorTouch.innerText = 'No';
+  }
+  if (elements.sensorTemp) {
+    elements.sensorTemp.innerText = (data.temperature !== undefined && data.temperature > 0) 
+      ? `${data.temperature.toFixed(1)} °C` 
+      : '24.0 °C';
+  }
   
   const sensorLight = document.getElementById('sensorLight');
   const sensorMotion = document.getElementById('sensorMotion');
@@ -647,6 +658,55 @@ function testAudio() {
         }, 3000);
       }, 8000); // 8 seconds for full test
     }
+  } else {
+    alert('Not connected to Nisya');
+  }
+}
+
+// ==============================================
+// DS3231 RTC Alarm & Time Functions
+// ==============================================
+
+function setAlarm() {
+  const input = document.getElementById('alarmTimeInput');
+  if (!input || !input.value) {
+    alert('Please select an alarm time first.');
+    return;
+  }
+  const parts = input.value.split(':');
+  const hour = parseInt(parts[0], 10);
+  const minute = parseInt(parts[1], 10);
+  
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({
+      type: 'set_alarm',
+      hour: hour,
+      minute: minute
+    }));
+    addMessage(`⏰ Alarm set for ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`, 'system');
+  } else {
+    alert('Not connected to Nisya');
+  }
+}
+
+function dismissAlarm() {
+  if (state.ws && state.isConnected) {
+    state.ws.send(JSON.stringify({ type: 'dismiss_alarm' }));
+    addMessage('🔕 Alarm dismissed / silenced', 'system');
+  } else {
+    alert('Not connected to Nisya');
+  }
+}
+
+function syncTimeNow() {
+  if (state.ws && state.isConnected) {
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()} ${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    state.ws.send(JSON.stringify({
+      type: 'sync_time',
+      timestamp: timestamp
+    }));
+    addMessage(`🔄 Synced DS3231 time: ${now.toLocaleTimeString()}`, 'system');
   } else {
     alert('Not connected to Nisya');
   }

@@ -3,8 +3,9 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import path from 'path';
 import os from 'os';
+import multer from 'multer';
 import { fileURLToPath } from 'url';
-import { textToSpeech, chat, detectEmotion } from './ai-services.js'; 
+import { textToSpeech, speechToText, chat, detectEmotion, setLanguage } from './ai-services.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,9 +42,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/audio', express.static(path.join(__dirname, 'audio'))); // Serve TTS audio files
 app.use(express.json());
 
+// Audio upload endpoint for whisper.cpp transcription
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+app.post('/stt', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file received' });
+    }
+    const mimeType = req.file.mimetype || 'audio/wav';
+    console.log(`[STT] Received audio: ${req.file.size} bytes, type: ${mimeType}`);
+    const transcript = await speechToText(req.file.buffer, mimeType);
+    res.json({ transcript });
+  } catch (err) {
+    console.error('[STT] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 let robotWs = null;
 let controllers = new Set(); 
 
+// Randomized cooldown for proximity greetings
 let lastGreetingTime = 0;
 let greetingCooldown = 25000; // Initial cooldown 25s
 
@@ -54,7 +74,7 @@ function getRandomCooldown() {
 
 const GREETING_PROMPTS = [
   "Greet your owner who just appeared nearby. Be brief and happy.",
-  "Someone is close! Say a quick, friendly hello in Tanglish.",
+  "Someone is close! Say a quick, friendly hello.",
   "Your owner is here! Express excitement briefly.",
   "Wave hello to the person who just came near you.",
   "Someone approached! Give a warm, short greeting.",
@@ -63,6 +83,94 @@ const GREETING_PROMPTS = [
 console.log(`\n🤖 SERVER READY: Connect PC to Hotspot`);
 console.log(`📡 IP MUST BE IN CONFIG.H: Check 'ipconfig' or use: ${SERVER_IP}\n`);
 
+// Handle incoming PCM audio stream from ESP32 mic
+let micAudioBuffer = [];
+let micAudioTimeout = null;
+let isProcessingMicAudio = false;
+
+function createWavHeader(dataLength, sampleRate = 16000, numChannels = 1, bitsPerSample = 16) {
+    const buffer = Buffer.alloc(44);
+    const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    const blockAlign = numChannels * (bitsPerSample / 8);
+
+    buffer.write('RIFF', 0);
+    buffer.writeUInt32LE(36 + dataLength, 4);
+    buffer.write('WAVE', 8);
+    buffer.write('fmt ', 12);
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20); // PCM
+    buffer.writeUInt16LE(numChannels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(byteRate, 28);
+    buffer.writeUInt16LE(blockAlign, 32);
+    buffer.writeUInt16LE(bitsPerSample, 34);
+    buffer.write('data', 36);
+    buffer.writeUInt32LE(dataLength, 40);
+
+    return buffer;
+}
+
+async function processMicAudioStream() {
+    if (micAudioBuffer.length === 0 || isProcessingMicAudio) return;
+    isProcessingMicAudio = true;
+
+    try {
+        const rawPcm = Buffer.concat(micAudioBuffer);
+        micAudioBuffer = []; // Reset buffer
+
+        if (rawPcm.length < 3200) { // Ignore chunks shorter than 100ms
+            isProcessingMicAudio = false;
+            return;
+        }
+
+        console.log(`🎙️ Processing mic audio: ${rawPcm.length} bytes PCM...`);
+        const header = createWavHeader(rawPcm.length, 16000, 1, 16);
+        const wavBuffer = Buffer.concat([header, rawPcm]);
+
+        if (robotWs && robotWs.readyState === 1) {
+            robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'thinking' }));
+        }
+
+        const transcript = await speechToText(wavBuffer, 'audio/wav');
+        console.log(`🗣️ Transcribed Voice: "${transcript}"`);
+
+        if (transcript && transcript.trim().length > 0) {
+            const reply = await chat(transcript);
+            const audio = await textToSpeech(reply);
+            const emotion = detectEmotion(reply);
+
+            broadcast({ type: 'chat_response', text: reply });
+
+            if (audio.audioFile && robotWs && robotWs.readyState === 1) {
+                let expressionBehavior = emotion || 'happy';
+                robotWs.send(JSON.stringify({ type: 'set_behavior', name: expressionBehavior }));
+                robotWs.send(JSON.stringify({
+                    type: 'play_audio',
+                    text: reply,
+                    url: `http://${SERVER_IP}:${PORT}${audio.audioFile}`
+                }));
+            }
+        }
+    } catch (err) {
+        console.error('❌ Mic audio processing error:', err.message);
+    } finally {
+        isProcessingMicAudio = false;
+    }
+}
+
+function handleMicAudioChunk(chunk) {
+    micAudioBuffer.push(chunk);
+
+    if (micAudioTimeout) clearTimeout(micAudioTimeout);
+    micAudioTimeout = setTimeout(processMicAudioStream, 800);
+
+    const totalBytes = micAudioBuffer.reduce((sum, buf) => sum + buf.length, 0);
+    if (totalBytes >= 16000 * 2 * 5) { // Max 5 seconds
+        if (micAudioTimeout) clearTimeout(micAudioTimeout);
+        processMicAudioStream();
+    }
+}
+
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const type = url.searchParams.get('type'); 
@@ -70,13 +178,13 @@ wss.on('connection', (ws, req) => {
     // 1. REGISTER ROBOT
     if (type === 'robot') {
         robotWs = ws;
-        console.log(`âœ… ROBOT CONNECTED!`);
+        console.log(`✅ ROBOT CONNECTED!`);
         broadcast({ type: 'robot_status', state: 'ONLINE' });
     } 
     // 2. REGISTER WEB APP
     else {
         controllers.add(ws);
-        console.log(`ðŸ’» WEB APP CONNECTED`);
+        console.log(`💻 WEB APP CONNECTED`);
         ws.send(JSON.stringify({ 
             type: 'robot_status', 
             state: robotWs ? 'ONLINE' : 'OFFLINE' 
@@ -85,6 +193,14 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', async (message) => {
         try {
+            // Handle binary PCM audio data from ESP32 mic
+            if (Buffer.isBuffer(message)) {
+                if (ws === robotWs) {
+                    handleMicAudioChunk(message);
+                }
+                return;
+            }
+
             const msg = JSON.parse(message);
 
             // A. FROM ROBOT -> WEB (Sync & Sensors)
@@ -201,6 +317,11 @@ wss.on('connection', (ws, req) => {
                         robotWs.send(JSON.stringify(msg));
                     }
                 } 
+                // Handle language preference selection from web dashboard
+                else if (msg.type === 'set_language') {
+                    console.log(`🌐 Language preference updated: ${msg.lang}`);
+                    setLanguage(msg.lang);
+                }
                 // Handle stopwatch commands
                 else if (msg.type === 'stopwatch_start' || msg.type === 'stopwatch_stop' || msg.type === 'stopwatch_reset') {
                     console.log(`⏱️ Stopwatch: ${msg.type}`);

@@ -32,11 +32,13 @@ public:
     testUltrasonicConnection();
   }
 
-  void update(bool skipUltrasonic = false) {
-    // Update distance reading every 200ms (throttled)
-    // SLEEP FIX: Skip ultrasonic reads during sleep to prevent micro-freezes
+  void update(bool sleepMode = false) {
+    // Update distance reading - throttled based on mode
+    // In sleep mode: read every 5 seconds (still detect, but reduce power/freezes)
+    // In active mode: read every 200ms for responsiveness
     static unsigned long lastDistanceRead = 0;
-    if (!skipUltrasonic && millis() - lastDistanceRead > 200) {
+    unsigned long readInterval = sleepMode ? 5000 : 200;
+    if (millis() - lastDistanceRead > readInterval) {
       lastDistanceRead = millis();
       lastDistance_ = readDistanceSimple();
     }
@@ -56,13 +58,14 @@ public:
     d.touchHead = (touchHead < ROBOT_TOUCH_THRESHOLD);
     d.touchSide = (touchSide < ROBOT_TOUCH_THRESHOLD);
     
-    // Debug output for touch calibration (less frequent)
+#if DEBUG_VERBOSE
     static unsigned long lastDebug = 0;
     if (millis() - lastDebug > 3000) {
       Serial.printf("[TOUCH] Head: %d, Side: %d (threshold: %d)\n", 
                     touchHead, touchSide, ROBOT_TOUCH_THRESHOLD);
       lastDebug = millis();
     }
+#endif
 
     // 3. Use cached distance (updated by update() method)
     d.distance_mm = lastDistance_;

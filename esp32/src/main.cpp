@@ -27,7 +27,6 @@
 // --- FUNCTION DECLARATIONS ---
 void testAudioSystems();
 void processWebSocketMessage(const WsQueueMessage& msg);
-void handleMessage(const char* type, JsonDocument& doc);
 
 // --- OBJECTS ---
 U8G2_SH1106_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE, PIN_I2C_SCL, PIN_I2C_SDA);
@@ -200,6 +199,10 @@ void startBehavior(const char* name, unsigned long now) {
     servo.setTarget(100, behaviorDuration); // Slight tilt
     soundFx.play("sleep");
   }
+  else if (strcmp(name, "sleeping") == 0) {
+    // CRITICAL: Return servo to center and stop all movement during sleep
+    servo.returnToCenter();
+  }
   else if (strcmp(name, "listening") == 0 || strcmp(name, "calm_idle") == 0) {
     servo.returnToCenter(); // Always center for these
   }
@@ -255,6 +258,9 @@ void processWebSocketMessage(const WsQueueMessage& msg) {
       lastInteractionTime = millis();
       break;
     case WS_MSG_PLAY_AUDIO:
+      #if ENABLE_MICROPHONE
+      micMgr.stopRecording(); // Time-multiplexing: stop mic driver during audio playback
+      #endif
       startBehavior("listening");
       audioMgr.playURL(msg.data);
       lastInteractionTime = millis();
@@ -275,106 +281,6 @@ void processWebSocketMessage(const WsQueueMessage& msg) {
       break;
     default:
       break;
-  }
-}
-
-
-void handleMessage(const char* type, JsonDocument& doc) {
-  if (strcmp(type, "set_behavior") == 0) {
-    webBehaviorActive = true;
-    webBehaviorTime = millis();
-    startBehavior(doc["name"], millis()); // FIXED: Use millis() instead of wrapper
-  }
-  else if (strcmp(type, "servo_action") == 0) {
-    servo.setTarget(doc["angle"], 3000); // Auto-return after 3s
-    lastInteractionTime = millis();
-  }
-  else if (strcmp(type, "led_action") == 0) {
-    // Handle LED color commands from web UI - supports hex colors
-    const char* color = doc["color"];
-    if (color) {
-      Serial.printf("[LED] Web command: %s\n", color);
-      
-      if (strcmp(color, "off") == 0) {
-        leds.setMood("sleeping");
-      } 
-      else if (strcmp(color, "#ff0000") == 0) leds.setMood("red");
-      else if (strcmp(color, "#00ff00") == 0) leds.setMood("green");
-      else if (strcmp(color, "#0000ff") == 0) leds.setMood("blue");
-      else if (strcmp(color, "#ffff00") == 0) leds.setMood("happy");
-      else if (strcmp(color, "#ff00ff") == 0) leds.setMood("purple");
-      else if (strcmp(color, "#00ffff") == 0) leds.setMood("cyan");
-      else if (strcmp(color, "#ffffff") == 0) leds.setMood("surprised");
-      else leds.setMood(color);
-    }
-    lastInteractionTime = millis();
-  }
-  else if (strcmp(type, "play_audio") == 0) {
-    startBehavior("listening");
-    
-    // Check if there's text to speak
-    if (doc.containsKey("text")) {
-      const char* text = doc["text"];
-      Serial.printf("[AUDIO] Speaking text: %s\n", text);
-      audioMgr.speakText(text);
-    } else if (doc.containsKey("url")) {
-      // Play audio from URL
-      audioMgr.playURL(doc["url"]);
-    }
-  }
-  else if (strcmp(type, "request_state") == 0) {
-    if (activeBehavior && robotWs.isConnected()) {
-      robotWs.sendStatus("sync_behavior", activeBehavior->name);
-    }
-  }
-  // ============= STOPWATCH COMMANDS =============
-  else if (strcmp(type, "stopwatch_start") == 0) {
-    rtcMgr.stopwatchStart();
-  }
-  else if (strcmp(type, "stopwatch_stop") == 0) {
-    rtcMgr.stopwatchStop();
-  }
-  else if (strcmp(type, "stopwatch_reset") == 0) {
-    rtcMgr.stopwatchReset();
-  }
-  // ============= AUDIO TEST COMMAND =============
-  else if (strcmp(type, "test_audio") == 0) {
-    Serial.println("[AUDIO] Starting audio system test...");
-    startBehavior("listening"); // Visual feedback
-    testAudioSystems();
-    lastInteractionTime = millis();
-  }
-  // ============= WAKE UP COMMANDS =============
-  else if (strcmp(type, "wake_up") == 0) {
-    Serial.println("[WAKE] Wake up command received");
-    // Force the robot out of sleep state
-    inSleepMode = false;
-    lastInteractionTime = millis();
-    
-    // Show appropriate expression based on the wake-up reason
-    if (doc.containsKey("expression")) {
-      const char* expression = doc["expression"];
-      Serial.printf("[WAKE] Setting expression: %s\n", expression);
-      startBehavior(expression);
-    } else {
-      // Default wake-up behavior
-      startBehavior("wake_up");
-    }
-  }
-  else if (strcmp(type, "stay_awake") == 0) {
-    Serial.println("[WAKE] Stay awake command received");
-    // Keep the robot active for specified duration
-    unsigned long duration = 25000; // Default 25 seconds
-    if (doc.containsKey("duration")) {
-      duration = doc["duration"];
-    }
-    
-    Serial.printf("[WAKE] Staying awake for %lu ms\n", duration);
-    lastInteractionTime = millis();
-    inSleepMode = false;
-    
-    // Start random movement behavior
-    startBehavior("random_movement");
   }
 }
 
@@ -414,7 +320,7 @@ void setup() {
   delay(500);
   
   Serial.println("\n\n========================================");
-  Serial.println("  DESKBOT COMPANION - FINAL FIX");
+  Serial.println("  NISYA COMPANION - FINAL FIX");
   Serial.println("========================================\n");
 
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
@@ -423,6 +329,9 @@ void setup() {
   servo.begin();
   sensors.begin();
   rtcMgr.begin();
+  #if ENABLE_MICROPHONE
+  micMgr.begin();
+  #endif
   soundFx.play("startup");
 
   Serial.println("[INIT] WiFi...");
@@ -440,6 +349,9 @@ void setup() {
   lastInteractionTime = millis();
   lastIdleCheckTime = millis();
   
+  Serial.printf("[MEM] Post-Init Free Heap: %d bytes | Max Alloc Block: %d bytes\n", 
+                ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
   // Disable default WDT and use manual feeding during sleep
   esp_task_wdt_init(30, false); // 30 second timeout, don't panic on timeout
 }
@@ -480,9 +392,9 @@ void loop() {
   servo.loop(dt);
   soundFx.update();
   
-  // SLEEP FIX: Skip ultrasonic during sleep to prevent micro-freezes
+  // Sensors update: read ultrasonic every 5s in sleep, 200ms when active
   bool inSleepState = inSleepMode || inDarkSleepMode;
-  sensors.update(inSleepState); // Skip ultrasonic when sleeping
+  sensors.update(inSleepState); // Slower interval in sleep mode, but still reads
   
   // Update stopwatch display if running
   if (rtcMgr.isStopwatchRunning()) {
@@ -513,10 +425,11 @@ void loop() {
   const unsigned long MOTION_HOLD_TIME = 10000; // 10 sec - ignore brief LOW periods (person still there)
   const unsigned long MOTION_AWAY_CONFIRM = 15000; // 15 sec of no motion = person left
   
-  // SENSOR DEBOUNCE: Extended for crowd environments
-  if (now - lastSensor > (PRESENTATION_MODE ? 200 : 100)) {
+  // SENSOR DEBOUNCE: Every 5 seconds in sleep mode, normal rate when active
+  unsigned long sensorInterval = inSleepState ? 5000 : (PRESENTATION_MODE ? 200 : 100);
+  if (now - lastSensor > sensorInterval) {
     lastSensor = now;
-    SensorData d = sensors.read(); // Always read sensors, even when sleeping
+    SensorData d = sensors.read(); // Always read sensors, including sleep mode (every 5s)
     bool activityDetected = false;
     bool servoIsMoving = servo.isMoving();
     
@@ -611,21 +524,34 @@ void loop() {
       activityDetected = true;
     }
 
-    // 4. MICROPHONE (crowd-proof thresholds)
+    // 4. MICROPHONE & VOICE STREAMING (Time-multiplexed)
     #if ENABLE_MICROPHONE
-    if (!servoIsMoving && (now - lastVolumeTrigger > 2000)) { // 2 sec audio cooldown
+    bool isAudioPlaying = audioMgr.getIsPlaying();
+    if (isAudioPlaying) {
+      // Ensure mic is uninstalled while speaker plays to save DMA RAM & avoid feedback
+      if (micMgr.isReady()) micMgr.stopRecording();
+    } else if (!servoIsMoving && (now - lastVolumeTrigger > 1500)) {
       int vol = micMgr.getLoudness();
-      if (vol > VOLUME_THRESHOLD_HIGH) {
-        startBehavior("surprised", now);
+      if (vol > MIC_VAD_THRESHOLD) {
+        startBehavior("listening", now);
         activityDetected = true;
         lastVolumeTrigger = now;
+        
+        // Stream audio chunk to websocket if connected
+        if (robotWs.isConnected() && micMgr.isReady()) {
+          uint8_t pcmBuf[256];
+          size_t bytesRead = micMgr.readChunk(pcmBuf, sizeof(pcmBuf));
+          if (bytesRead > 0) {
+            robotWs.sendAudioChunk(pcmBuf, bytesRead);
+          }
+        }
       } 
       else if (vol > VOLUME_THRESHOLD_LOW) {
         startBehavior("listening", now);
         activityDetected = true;
         lastVolumeTrigger = now;
       }
-      if (vol > 20) leds.voiceReact(vol); // Higher threshold for LED react
+      if (vol > 20) leds.voiceReact(vol); // Voice visual reaction
     }
     #endif
 
@@ -637,7 +563,8 @@ void loop() {
     }
     
     // 6. AUTONOMOUS IDLE EYE MOVEMENTS (when calm and no activity)
-    if (!activityDetected && activeBehavior && 
+    // CRITICAL: Disable autonomous movements during sleep to prevent jitter
+    if (!activityDetected && !inSleepMode && !inDarkSleepMode && activeBehavior && 
         strcmp(activeBehavior->name, "calm_idle") == 0 && 
         (now - lastIdleMovement > 8000 + random(5000))) { // 8-13 second intervals
       
@@ -671,12 +598,19 @@ void loop() {
   }
   
   // 4. Idle Management (Presentation Mode)
+  // AUDIO WAKE FIX: Keep awake while audio is playing
+  bool audioPlaying = audioMgr.getIsPlaying();
+  if (audioPlaying) {
+    lastInteractionTime = now; // Reset idle timer while audio plays
+  }
+  
   if (now - lastIdleCheckTime > 1000) {
     lastIdleCheckTime = now;
     unsigned long idleTime = now - lastInteractionTime;
     unsigned long sleepDelay = PRESENTATION_MODE ? (IDLE_TO_SLEEPY_DELAY * 3) : IDLE_TO_SLEEPY_DELAY; // 60 sec in presentation mode
     
-    if (!inDarkSleepMode && activeBehavior && idleTime > sleepDelay && !inSleepMode) {
+    // Don't go to sleep if audio is playing
+    if (!audioPlaying && !inDarkSleepMode && activeBehavior && idleTime > sleepDelay && !inSleepMode) {
       if (strcmp(activeBehavior->name, "sleepy_idle") != 0 && 
           strcmp(activeBehavior->name, "sleeping") != 0) {
         startBehavior("sleepy_idle", now);

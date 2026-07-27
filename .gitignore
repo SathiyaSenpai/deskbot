@@ -1,50 +1,9 @@
-# Environment and secrets
+node_modules/
+venv/
+.pio/
+.cache/
+audio/
+*.log
+*.wav
+*.mp3
 .env
-.env.local
-.env.production
-*.pem
-*.key
-
-# node and vscode
-.vscode/
-node_modules/
-
-# Compiled Python
-__pycache__/
-*.pyc
-*.pyo
-*.so
-*.egg-info/
-dist/
-build/
-
-# Jetson compiled binaries
-jetson/build/
-jetson/*.compiled
-
-# ESP32 build artifacts
-esp32/.pio/
-esp32/.vscode/
-
-# IDE
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Audio temp files
-server/audio/*.mp3
-
-# Node
-node_modules/
-npm-debug.log*
-
-# Health data (never commit patient data)
-*.sqlite
-*.db
-health_data/
-backups/

@@ -34,12 +34,12 @@ private:
   bool connected = false;
   String serverHost;
   int serverPort;
-  QueueHandle_t messageQueue;
+  QueueHandle_t messageQueue = NULL;
 
   void handleEvent(WStype_t type, uint8_t* payload, size_t len) {
     switch(type) {
       case WStype_DISCONNECTED:
-        if (connected) Serial.println("[WS] Disconnected");
+        if (connected) Serial.println(F("[WS] Disconnected"));
         connected = false;
         break;
         
@@ -59,7 +59,7 @@ private:
   }
 
   void handleMessage(uint8_t* payload, size_t len) {
-    StaticJsonDocument<1024> doc;
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload);
     if (err) {
       Serial.printf("[WS] JSON parse error: %s\n", err.c_str());
@@ -115,8 +115,8 @@ private:
     }
 
     if (sendToQueue && qMsg.type != WS_MSG_NONE) {
-      if (xQueueSend(messageQueue, &qMsg, 0) != pdTRUE) {
-        Serial.println("[WS] Queue full, message dropped");
+      if (messageQueue != NULL && xQueueSend(messageQueue, &qMsg, 0) != pdTRUE) {
+        Serial.println(F("[WS] Queue full, message dropped"));
       }
     }
   }
@@ -128,10 +128,16 @@ public:
   }
 
   void begin() {
+    // Delete previous queue to prevent memory leaks if begin() is called multiple times
+    if (messageQueue != NULL) {
+      vQueueDelete(messageQueue);
+      messageQueue = NULL;
+    }
+
     // Create FreeRTOS queue for messages
-    messageQueue = xQueueCreate(10, sizeof(WsQueueMessage));
+    messageQueue = xQueueCreate(6, sizeof(WsQueueMessage));
     if (messageQueue == NULL) {
-      Serial.println("[WS] Failed to create message queue!");
+      Serial.println(F("[WS] Failed to create message queue!"));
     }
 
     const char* host = serverHost.length() > 0 ? serverHost.c_str() : WS_HOST;
@@ -152,13 +158,14 @@ public:
 
   // Get next message from queue (non-blocking)
   bool getMessage(WsQueueMessage& msg) {
+    if (messageQueue == NULL) return false;
     return xQueueReceive(messageQueue, &msg, 0) == pdTRUE;
   }
 
   void sendStatus(const char* event, const char* detail) {
     if (!connected) return;
     
-    StaticJsonDocument<256> doc;
+    JsonDocument doc;
     doc["type"] = "robot_status";
     doc["event"] = event;
     doc["detail"] = detail;
@@ -171,7 +178,7 @@ public:
   void sendSensors(const SensorData& s) {
     if (!connected) return;
     
-    StaticJsonDocument<384> doc;
+    JsonDocument doc;
     doc["type"] = "sensor_data";
     doc["light"] = s.light;
     doc["motion"] = s.motion;
@@ -183,7 +190,13 @@ public:
     serializeJson(doc, output);
     ws.sendTXT(output);
   }
-  
+
+  // Stream raw PCM audio data over WebSocket
+  void sendAudioChunk(const uint8_t* pcmData, size_t len) {
+    if (!connected || pcmData == nullptr || len == 0) return;
+    ws.sendBIN(pcmData, len);
+  }
+
   void sendRaw(const char* json) {
     if (!connected) return;
     ws.sendTXT(json);

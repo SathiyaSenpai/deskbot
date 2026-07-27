@@ -17,10 +17,11 @@ const elements = {
   sensorTouch: document.getElementById('sensorTouch'),
   chat: document.getElementById('chatMessages'),
   input: document.getElementById('messageInput'),
-  sendBtn: document.getElementById('sendButton')
+  sendBtn: document.getElementById('sendButton'),
+  langSelect: document.getElementById('languageSelect')
 };
 
-// COMPLETE BEHAVIOR DEFINITIONS
+// Behavior animation parameters synced with firmware
 const BEHAVIORS = {
   // IDLE STATES
   'calm_idle':   { 
@@ -32,7 +33,7 @@ const BEHAVIORS = {
     width: 34, height: 32, radius: 10, upperCurve: 0.3, lowerCurve: 0
   },
 
-  // EMOTIONS
+  // EMOTIONS (PHASE 13: Geometry-based)
   'happy': { 
     openness: 1.0, scaleX: 1.1, top: 0.0, bot: 0.6, x: 0, y: -2,
     width: 35, height: 42, radius: 12, upperCurve: -0.1, lowerCurve: 0.2
@@ -101,7 +102,7 @@ let blinkTimer = 0;
 let nextBlink = 3.0;
 let isBlinking = false;
 
-// Effect rendering
+// PHASE 6: Effect rendering
 let activeEffect = 'none';
 let effectTimer = 0;
 
@@ -153,7 +154,7 @@ function renderLoop(timestamp) {
     elements.eyeLeft.style.transform = transform;
     elements.eyeLeft.style.clipPath = clip;
     
-    // Apply geometry if available
+    // PHASE 13: Apply geometry if available
     if (currentAnim.width) {
       const w = currentAnim.width * 0.43;
       const h = currentAnim.height * 0.43;
@@ -184,7 +185,7 @@ function renderLoop(timestamp) {
   requestAnimationFrame(renderLoop);
 }
 
-// Effect rendering system
+// PHASE 6: Effect rendering system
 function renderEffects() {
   if (!elements.eyeRight) return;
   
@@ -239,8 +240,9 @@ function connect() {
     updateStatus('Connected', 'connected');
     if (elements.input) elements.input.disabled = false;
     if (elements.sendBtn) elements.sendBtn.disabled = false;
-    // Request current robot state if robot is already connected
-    // Server will send robot_status with state when we connect
+    if (elements.langSelect) {
+      state.ws.send(JSON.stringify({ type: 'set_language', lang: elements.langSelect.value }));
+    }
   };
 
   state.ws.onmessage = (evt) => {
@@ -276,9 +278,10 @@ function connect() {
         setBehavior(msg.detail);
       }
     }
-    // Sync from button clicks
+    // Sync from button clicks (only if not from our own command)
     else if (msg.type === 'set_behavior') {
-
+      // Only update if this is a response, not our own command
+      // We'll track if we sent this command to avoid double updates
       if (!state.pendingBehavior || state.pendingBehavior !== msg.name) {
         setBehavior(msg.name);
       }
@@ -420,102 +423,115 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Enter') sendChat();
     };
   }
+  if (elements.langSelect) {
+    elements.langSelect.onchange = (e) => {
+      if (state.ws && state.isConnected) {
+        state.ws.send(JSON.stringify({ type: 'set_language', lang: e.target.value }));
+        console.log(`[LANG] Switched language to: ${e.target.value}`);
+      }
+    };
+  }
   
-  // PHONE MIC Web Speech API Implementation
+  // Record browser microphone audio and send to /stt endpoint
   const micButton = document.getElementById('micButton');
   const micIcon = micButton?.querySelector('.mic-icon');
   const micStatus = micButton?.querySelector('.mic-status');
-  
-  // Check for browser support
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  
-  if (micButton && SpeechRecognition) {
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN'; // Indian English
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    
-    let isListening = false;
-    
-    micButton.onclick = () => {
-      if (!state.isConnected) {
-        alert('Not connected to server');
-        return;
-      }
-      
-      if (isListening) {
-        recognition.stop();
-        return;
-      }
-      
-      try {
-        recognition.start();
-        isListening = true;
-        micButton.classList.add('listening');
-        if (micIcon) micIcon.textContent = '🔴';
-        if (micStatus) micStatus.textContent = 'Listening...';
-        console.log('[MIC] Speech recognition started');
-      } catch (err) {
-        console.error('[MIC] Failed to start:', err);
-      }
-    };
-    
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      const confidence = event.results[0][0].confidence;
-      console.log(`[MIC] Recognized: "${transcript}" (confidence: ${(confidence * 100).toFixed(1)}%)`);
-      
-      // Send to chat
-      if (transcript.trim()) {
-        addMessage(transcript, 'user');
-        if (state.ws && state.isConnected) {
-          state.ws.send(JSON.stringify({ type: 'chat_message', text: transcript }));
+
+  if (micButton) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      micButton.title = 'Microphone not available in this browser';
+      micButton.style.opacity = '0.5';
+      micButton.onclick = () => alert('Microphone access requires HTTPS or localhost.\nYou can still type messages below!');
+      console.log('[MIC] getUserMedia not available');
+    } else {
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let isListening = false;
+
+      micButton.title = 'Click to speak (Sarvam AI - Saarika STT)';
+      micButton.style.opacity = '1';
+
+      micButton.onclick = async () => {
+        if (!state.isConnected) {
+          alert('Not connected to server');
+          return;
         }
-      }
-    };
-    
-    recognition.onerror = (event) => {
-      console.error('[MIC] Error:', event.error);
-      if (micStatus) {
-        switch(event.error) {
-          case 'no-speech':
-            micStatus.textContent = 'No speech detected';
-            break;
-          case 'audio-capture':
-            micStatus.textContent = 'No microphone found';
-            break;
-          case 'not-allowed':
-            micStatus.textContent = 'Mic permission denied';
-            break;
-          default:
-            micStatus.textContent = `Error: ${event.error}`;
+
+        if (isListening) {
+          // Stop recording
+          mediaRecorder.stop();
+          return;
         }
-      }
-    };
-    
-    recognition.onend = () => {
-      isListening = false;
-      micButton.classList.remove('listening');
-      if (micIcon) micIcon.textContent = '🎤';
-      setTimeout(() => {
-        if (micStatus) micStatus.textContent = '';
-      }, 2000);
-      console.log('[MIC] Speech recognition ended');
-    };
-    
-    // Add visual hint that mic is available
-    micButton.title = 'Click to speak (Speech Recognition)';
-    micButton.style.opacity = '1';
-  } else if (micButton) {
-    // Browser doesn't support Speech Recognition
-    micButton.onclick = () => {
-      alert('Speech recognition not supported in this browser.\\nPlease use Chrome, Edge, or Safari.\\n\\nYou can still type messages below!');
-    };
-    micButton.title = 'Speech not supported - use text input';
-    micButton.style.opacity = '0.5';
-    console.log('[MIC] Speech Recognition not supported');
-  }
+
+        // Start recording
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          audioChunks = [];
+
+          // Prefer WAV; fall back to whatever the browser supports
+          const mimeType = MediaRecorder.isTypeSupported('audio/wav')
+            ? 'audio/wav'
+            : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+              ? 'audio/ogg;codecs=opus'
+              : 'audio/webm;codecs=opus';
+
+          mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            isListening = false;
+            micButton.classList.remove('listening');
+            if (micIcon) micIcon.textContent = '🎤';
+            if (micStatus) micStatus.textContent = 'Processing...';
+            stream.getTracks().forEach(t => t.stop()); // release mic
+
+            try {
+              const blob = new Blob(audioChunks, { type: mimeType });
+              console.log(`[MIC] Sending ${blob.size} bytes to Sarvam STT (${mimeType})`);
+
+              const formData = new FormData();
+              formData.append('audio', blob, 'recording.' + (mimeType.includes('wav') ? 'wav' : mimeType.includes('ogg') ? 'ogg' : 'webm'));
+
+              const resp = await fetch('/stt', { method: 'POST', body: formData });
+              const result = await resp.json();
+
+              if (!resp.ok) throw new Error(result.error || 'STT failed');
+
+              const transcript = result.transcript?.trim();
+              console.log(`[MIC] Sarvam STT: "${transcript}"`);
+
+              if (transcript) {
+                addMessage(transcript, 'user');
+                if (state.ws && state.isConnected) {
+                  state.ws.send(JSON.stringify({ type: 'chat_message', text: transcript }));
+                }
+                if (micStatus) micStatus.textContent = '';
+              } else {
+                if (micStatus) { micStatus.textContent = 'No speech detected'; setTimeout(() => { micStatus.textContent = ''; }, 2000); }
+              }
+            } catch (err) {
+              console.error('[MIC] STT error:', err);
+              if (micStatus) { micStatus.textContent = `Error: ${err.message}`; setTimeout(() => { micStatus.textContent = ''; }, 3000); }
+            }
+          };
+
+          mediaRecorder.start();
+          isListening = true;
+          micButton.classList.add('listening');
+          if (micIcon) micIcon.textContent = '🔴';
+          if (micStatus) micStatus.textContent = 'Listening... (tap to stop)';
+          console.log('[MIC] Recording started with Sarvam Saarika STT');
+        } catch (err) {
+          console.error('[MIC] Failed to start recording:', err);
+          if (micStatus) { micStatus.textContent = err.name === 'NotAllowedError' ? 'Mic permission denied' : `Error: ${err.message}`; setTimeout(() => { micStatus.textContent = ''; }, 3000); }
+        }
+      };
+      console.log('[MIC] Sarvam STT mic ready');
+    } // end else (getUserMedia available)
+  } // end if (micButton)
   
   // Servo buttons
   const servoLeft = document.getElementById('servoLeft');
@@ -545,6 +561,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   });
 });
+
+// ==============================================
+// Demo Panel Functions
+// ==============================================
 
 // Stopwatch controls
 let stopwatchInterval = null;
@@ -604,6 +624,10 @@ function updateStopwatchDisplay() {
   display.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
 }
 
+// ==============================================
+// Audio Testing Function
+// ==============================================
+
 function testAudio() {
   if (state.ws && state.isConnected) {
     state.ws.send(JSON.stringify({ type: 'test_audio' }));
@@ -624,6 +648,6 @@ function testAudio() {
       }, 8000); // 8 seconds for full test
     }
   } else {
-    alert('Not connected to DeskBot');
+    alert('Not connected to Nisya');
   }
 }

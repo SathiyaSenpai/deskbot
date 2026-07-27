@@ -192,9 +192,9 @@ public:
       targetSaccadeY_ = 0;
     }
     
-    // Debug output every 5 seconds (reduced during sleep to prevent overhead)
+#if DEBUG_VERBOSE
     static unsigned long lastDebug = 0;
-    unsigned long debugInterval = (activeEffect_ == EFFECT_ZZZ) ? 5000 : 1000; // Less frequent during sleep
+    unsigned long debugInterval = (activeEffect_ == EFFECT_ZZZ) ? 5000 : 1000;
     if (millis() - lastDebug > debugInterval) {
       Serial.printf("[EYE] Current: w=%.1f h=%.1f topLid=%.2f/%.2f botLid=%.2f/%.2f blink=%.2f effect=%d\n",
                     currentWidth_, currentHeight_, 
@@ -203,6 +203,7 @@ public:
                     blinkFactor_, (int)activeEffect_);
       lastDebug = millis();
     }
+#endif
   }
 
 private:
@@ -329,13 +330,14 @@ private:
       display_.drawBox(x, y + h - botH, w, botH);
     }
     
-    // Debug: Print lid calculations
+#if DEBUG_VERBOSE
     static unsigned long lastLidDebug = 0;
     if (millis() - lastLidDebug > 2000 && drawEffects) {
       Serial.printf("[EYE RENDER] Eye at (%d,%d) size %dx%d, topLid=%dpx (%.2f), botLid=%dpx (%.2f)\n",
                     x, y, w, h, topH, topLid_, botH, bottomLid_);
       lastLidDebug = millis();
     }
+#endif
     
     // STEP 3: Draw effects on right eye only
     if (drawEffects && activeEffect_ != EFFECT_NONE) {

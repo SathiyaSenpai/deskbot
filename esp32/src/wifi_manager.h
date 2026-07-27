@@ -7,6 +7,23 @@
 #include <DNSServer.h>
 #include "config.h"
 
+// HTML string stored in PROGMEM (Flash memory) to save DRAM
+static const char HTML[] PROGMEM = R"(
+<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Nisya Setup</title><style>body{font-family:Arial;background:#1a1a2e;color:#fff;padding:20px}
+.container{max-width:400px;margin:0 auto}h1{color:#00d4ff;text-align:center}
+input{width:100%;padding:12px;margin:8px 0;border:none;border-radius:8px;box-sizing:border-box}
+input[type=submit]{background:#00d4ff;color:#000;font-weight:bold;cursor:pointer}
+</style></head><body><div class='container'><h1>🤖 Nisya Setup</h1>
+<form action='/save' method='POST'>
+WiFi SSID:<input name='ssid' required><br>
+Password:<input name='pass' type='password'><br>
+Server IP:<input name='ip' value='10.121.79.219'><br>
+Server Port:<input name='port' type='number' value='3000'><br>
+<input type='submit' value='Save & Restart'>
+</form></div></body></html>
+)";
+
 class WiFiManager {
 private:
     Preferences prefs;
@@ -20,30 +37,14 @@ private:
     bool portalRunning = false;
     unsigned long portalStartTime = 0;
 
-    const char* HTML = R"(
-<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>DeskBot Setup</title><style>body{font-family:Arial;background:#1a1a2e;color:#fff;padding:20px}
-.container{max-width:400px;margin:0 auto}h1{color:#00d4ff;text-align:center}
-input{width:100%;padding:12px;margin:8px 0;border:none;border-radius:8px;box-sizing:border-box}
-input[type=submit]{background:#00d4ff;color:#000;font-weight:bold;cursor:pointer}
-</style></head><body><div class='container'><h1>🤖 DeskBot Setup</h1>
-<form action='/save' method='POST'>
-WiFi SSID:<input name='ssid' required><br>
-Password:<input name='pass' type='password'><br>
-Server IP:<input name='ip' value='192.168.43.1'><br>
-Server Port:<input name='port' type='number' value='3000'><br>
-<input type='submit' value='Save & Restart'>
-</form></div></body></html>
-)";
-
 public:
     void begin() {
         // Use consistent namespace
-        if (!prefs.begin("deskbot-wifi", false)) {
-            Serial.println("[WiFi] NVS init failed, erasing...");
+        if (!prefs.begin("nisya-wifi", false)) {
+            Serial.println(F("[WiFi] NVS init failed, erasing..."));
             prefs.clear();
             prefs.end();
-            prefs.begin("deskbot-wifi", false);
+            prefs.begin("nisya-wifi", false);
         }
         
         savedSSID = prefs.getString("ssid", "");
@@ -63,14 +64,14 @@ public:
 
     bool autoConnect() {
         if (savedSSID.length() == 0) {
-            Serial.println("[WiFi] No credentials");
+            Serial.println(F("[WiFi] No credentials"));
             return false;
         }
         
         WiFi.mode(WIFI_STA);
         WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
         
-        Serial.print("[WiFi] Connecting");
+        Serial.print(F("[WiFi] Connecting"));
         int attempts = 0;
         while (WiFi.status() != WL_CONNECTED && attempts < 20) {
             delay(500);
@@ -83,11 +84,14 @@ public:
             return true;
         }
         
-        Serial.println("\n[WiFi] Connection failed");
+        Serial.println(F("\n[WiFi] Connection failed"));
         return false;
     }
 
     void startPortal() {
+        // Guard against memory leaks if portal already running
+        stopPortal();
+
         WiFi.mode(WIFI_AP);
         WiFi.softAP(WIFI_MANAGER_AP_NAME, WIFI_MANAGER_AP_PASS);
         
@@ -99,7 +103,7 @@ public:
         
         server = new WebServer(80);
         
-        server->on("/", [this](){ server->send(200, "text/html", HTML); });
+        server->on("/", [this](){ server->send_P(200, "text/html", HTML); });
         
         server->on("/save", HTTP_POST, [this](){
             String ssid = server->arg("ssid");
@@ -132,22 +136,27 @@ public:
     void handlePortal() {
         if (!portalRunning) return;
         
-        dnsServer->processNextRequest();
-        server->handleClient();
+        if (dnsServer) dnsServer->processNextRequest();
+        if (server) server->handleClient();
         
         // Timeout after WIFI_MANAGER_TIMEOUT seconds
         if (millis() - portalStartTime > WIFI_MANAGER_TIMEOUT * 1000) {
-            Serial.println("[WiFi] Portal timeout");
+            Serial.println(F("[WiFi] Portal timeout"));
             stopPortal();
         }
     }
 
     void stopPortal() {
-        if (!portalRunning) return;
-        
-        if (server) { server->stop(); delete server; server = nullptr; }
-        if (dnsServer) { dnsServer->stop(); delete dnsServer; dnsServer = nullptr; }
-        
+        if (server) { 
+            server->stop(); 
+            delete server; 
+            server = nullptr; 
+        }
+        if (dnsServer) { 
+            dnsServer->stop(); 
+            delete dnsServer; 
+            dnsServer = nullptr; 
+        }
         portalRunning = false;
     }
 

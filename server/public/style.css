@@ -1000,7 +1000,25 @@ body {
 
 .chat-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  align-items: center;
+}
+
+.lang-select {
+  padding: 4px 8px;
+  font-size: 13px;
+  background: #f0f2f5;
+  border: 1px solid #e8eaed;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #333;
+  font-weight: 500;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.lang-select:hover {
+  background: #e8eaed;
 }
 
 .servo-btn {

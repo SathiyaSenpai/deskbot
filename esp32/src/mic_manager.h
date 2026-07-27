@@ -7,30 +7,40 @@
 #include "config.h"
 
 #define I2S_MIC_PORT I2S_NUM_1
-#define SAMPLE_RATE 16000
-#define BUFFER_LEN 32  // Reduced for memory efficiency
+#define MIC_SAMPLE_RATE 16000
+#define MIC_BUFFER_LEN 64 // Samples per buffer
 
 class MicManager {
 private:
-  bool initialized = false;  // Start as false, set to true only after successful init
+  bool initialized = false;
+  bool isRecordingState = false;
+  int16_t sampleBuffer[MIC_BUFFER_LEN]; // Class member instead of stack allocation
 
 public:
   void begin() {
-    initialized = false;  // Reset on begin
     #if !ENABLE_MICROPHONE
-      Serial.println("[MIC] Disabled in config");
+      Serial.println(F("[MIC] Disabled in config"));
       return;
     #endif
+    // Driver not installed at boot — installed on demand when needed
+    // This saves ~2-3 KB of DMA RAM until first voice activity
+    initialized = false;
+    isRecordingState = false;
+    Serial.println(F("[MIC] Ready (on-demand mode — driver installs on first use)"));
+  }
+
+  bool startRecording() {
+    if (initialized) return true;
 
     i2s_config_t i2s_config = {
       .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-      .sample_rate = SAMPLE_RATE,
-      .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
+      .sample_rate = MIC_SAMPLE_RATE,
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT, // 16-bit saves 50% DMA memory vs 32-bit
       .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
       .communication_format = I2S_COMM_FORMAT_STAND_I2S,
       .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-      .dma_buf_count = 2,  // Reduced from 4
-      .dma_buf_len = BUFFER_LEN,
+      .dma_buf_count = 3,
+      .dma_buf_len = MIC_BUFFER_LEN,
       .use_apll = false,
       .tx_desc_auto_clear = false,
       .fixed_mclk = 0
@@ -46,43 +56,66 @@ public:
     esp_err_t err = i2s_driver_install(I2S_MIC_PORT, &i2s_config, 0, NULL);
     if (err != ESP_OK) {
       Serial.printf("[MIC] Driver install failed: %d\n", err);
-      return;
+      return false;
     }
 
     err = i2s_set_pin(I2S_MIC_PORT, &pin_config);
     if (err != ESP_OK) {
       Serial.printf("[MIC] Pin config failed: %d\n", err);
       i2s_driver_uninstall(I2S_MIC_PORT);
-      return;
+      return false;
     }
 
     initialized = true;
-    Serial.println("[MIC] Initialized successfully");
+    isRecordingState = true;
+    Serial.println(F("[MIC] Installed & recording started"));
+    return true;
+  }
+
+  void stopRecording() {
+    if (initialized) {
+      i2s_driver_uninstall(I2S_MIC_PORT);
+      initialized = false;
+      isRecordingState = false;
+      Serial.println(F("[MIC] Driver uninstalled (freed DMA memory)"));
+    }
   }
 
   int getLoudness() {
-    if (!initialized) return 0;
+    if (!initialized) {
+      // Install driver temporarily for this measurement
+      if (!startRecording()) return 0;
+      // Brief settle time for DMA buffers to fill (avoids bogus first reading)
+      delay(5);
+    }
 
-    int32_t samples[BUFFER_LEN];
     size_t bytes_read = 0;
-    
-    esp_err_t err = i2s_read(I2S_MIC_PORT, samples, sizeof(samples), &bytes_read, 10);
+    esp_err_t err = i2s_read(I2S_MIC_PORT, sampleBuffer, sizeof(sampleBuffer), &bytes_read, 20);
     if (err != ESP_OK || bytes_read == 0) return 0;
 
     uint64_t sum = 0;
-    int sample_count = bytes_read / sizeof(int32_t);
+    int sample_count = bytes_read / sizeof(int16_t);
+    if (sample_count == 0) return 0;
     
     for (int i = 0; i < sample_count; i++) {
-      int32_t sample = samples[i] >> 14;  // Normalize 24-bit to 16-bit
+      int32_t sample = (int32_t)sampleBuffer[i];
       sum += (uint64_t)(sample * sample);
     }
     
-    float rms = sqrt((double)sum / sample_count);
-    int vol = (int)(rms / 50.0); 
+    float rms = sqrtf((float)sum / sample_count);
+    int vol = (int)(rms / 50.0f); 
     return (vol > 100) ? 100 : vol;
   }
 
+  size_t readChunk(uint8_t* buffer, size_t maxBytes) {
+    if (!initialized) return 0;
+    size_t bytes_read = 0;
+    i2s_read(I2S_MIC_PORT, buffer, maxBytes, &bytes_read, 10);
+    return bytes_read;
+  }
+
   bool isReady() { return initialized; }
+  bool isRecording() { return isRecordingState; }
 };
 
 #endif

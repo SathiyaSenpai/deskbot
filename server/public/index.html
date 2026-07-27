@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="AI DeskBot companion control interface">
-  <title>DeskBot - Control Dashboard</title>
+  <meta name="description" content="Nisya AI companion robot control interface">
+  <title>Nisya - Control Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- Top Status Bar -->
   <header class="status-bar">
-    <div class="robot-name" id="robotName">🤖 DeskBot Companion</div>
+    <div class="robot-name" id="robotName">🤖 Nisya Companion</div>
     <div class="connection" id="connectionStatus" data-status="disconnected">
       <span class="status-indicator">●</span>
       <span class="status-text">Disconnected</span>
@@ -30,7 +30,7 @@
           <div class="eye" id="eyeLeft"></div>
           <div class="eye" id="eyeRight"></div>
         </div>
-        <div class="robot-name-label">DESKBOT</div>
+        <div class="robot-name-label">NISYA</div>
         <div class="behavior-label" id="currentBehavior">calm_idle</div>
       </div>
       
@@ -90,8 +90,13 @@
     <!-- Right: Chat Panel -->
     <section class="chat-panel" aria-label="Conversation">
       <div class="chat-header">
-        <h2>💬 Chat with DeskBot</h2>
+        <h2>💬 Chat with Nisya</h2>
         <div class="chat-actions">
+          <select id="languageSelect" class="lang-select" title="Voice & Language">
+            <option value="en">🇺🇸 English (Kokoro)</option>
+            <option value="ta">🇮🇳 Tamil / தமிழ் (Piper)</option>
+            <option value="hi">🇮🇳 Hindi / हिंदी (Kokoro)</option>
+          </select>
           <button id="servoLeft" class="servo-btn" title="Look Left">⬅️</button>
           <button id="servoCenter" class="servo-btn" title="Center">⏺️</button>
           <button id="servoRight" class="servo-btn" title="Look Right">➡️</button>
@@ -100,7 +105,7 @@
       <div class="chat-messages" id="chatMessages">
         <!-- Messages will be added dynamically by JavaScript -->
         <div class="message robot">
-          <div class="message-content">வணக்கம்! I'm your friendly DeskBot companion 😊</div>
+          <div class="message-content">வணக்கம்! I'm Nisya, your caring companion 😊</div>
           <div class="message-time">Just now</div>
         </div>
       </div>

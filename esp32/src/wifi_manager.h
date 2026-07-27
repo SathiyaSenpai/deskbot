@@ -80,6 +80,7 @@ public:
             Serial.print(".");
             attempts++;
         }
+        Serial.println();
         
         if (WiFi.status() == WL_CONNECTED) {
             Serial.printf("\n[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());

@@ -373,6 +373,11 @@ void setup() {
       
       robotWs.setServer(wifiMgr.getServerIP().c_str(), wifiMgr.getServerPort());
       robotWs.begin();
+  } else {
+      Serial.println(F("[WIFI] AutoConnect failed -> Starting AP Portal (Nisya-Setup)"));
+      wifiMgr.startPortal();
+      // Initialize audio in AP mode as well for offline operation
+      audioMgr.begin();
   }
   
   eye.startBootSequence();

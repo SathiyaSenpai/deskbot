@@ -477,6 +477,25 @@ void loop() {
   const unsigned long MOTION_HOLD_TIME = 10000; // 10 sec - ignore brief LOW periods (person still there)
   const unsigned long MOTION_AWAY_CONFIRM = 15000; // 15 sec of no motion = person left
   
+  // DYNAMIC TOUCH DYNAMICS STATE
+  static unsigned long lastTouchTime = 0;
+  static unsigned long touchRefractoryWindow = 0;
+  static int touchStreakCount = 0;
+  static unsigned long lastTouchStreakTime = 0;
+  static bool pendingTouchReaction = false;
+  static unsigned long touchReactionTargetTime = 0;
+  static const char* pendingTouchBehavior = nullptr;
+
+  // Process pending organic touch reaction (simulates 50-180ms nerve response latency)
+  if (pendingTouchReaction && now >= touchReactionTargetTime) {
+    pendingTouchReaction = false;
+    if (pendingTouchBehavior) {
+      Serial.printf("[TOUCH-DYNAMICS] Triggering organic reaction '%s' (Streak: %d)\n", 
+                    pendingTouchBehavior, touchStreakCount);
+      startBehavior(pendingTouchBehavior, now);
+    }
+  }
+  
   // SENSOR DEBOUNCE: Every 5 seconds in sleep mode, normal rate when active
   unsigned long sensorInterval = inSleepState ? 5000 : (PRESENTATION_MODE ? 200 : 100);
   if (now - lastSensor > sensorInterval) {
@@ -485,21 +504,48 @@ void loop() {
     bool activityDetected = false;
     bool servoIsMoving = servo.isMoving();
     
-    // 1. TOUCH
-    if (d.touchHead) {
-      // Only trigger if we aren't ALREADY happy (prevents restart spam)
-      if (!activeBehavior || strcmp(activeBehavior->name, "happy") != 0) {
-          Serial.println("\n[TOUCH] HEAD TOUCHED!");
-          startBehavior("happy", now); 
-      }
+    // 1. DYNAMIC TOUCH HANDLING
+    // Reset streak count if no touch for > 12 seconds
+    if (touchStreakCount > 0 && (now - lastTouchStreakTime > 12000)) {
+      touchStreakCount = 0;
+      Serial.println(F("[TOUCH-DYNAMICS] Streak reset (idle > 12s)"));
+    }
+
+    if (d.touchHead || d.touchSide) {
       activityDetected = true;
-    } 
-    else if (d.touchSide) {
-      if (!activeBehavior || strcmp(activeBehavior->name, "shy_happy") != 0) {
-          Serial.println("\n[TOUCH] SIDE TOUCHED!");
-          startBehavior("shy_happy", now);
+      // Check if we are outside the dynamic refractory window
+      if (now - lastTouchTime >= touchRefractoryWindow) {
+        lastTouchTime = now;
+        lastTouchStreakTime = now;
+        touchStreakCount++;
+
+        const char* behaviorToTrigger = "happy";
+        
+        if (touchStreakCount >= 4) {
+          // OVER-PETTING / TICKLED: Companion enters tickled/playful state & long cool-down
+          behaviorToTrigger = (random(0, 2) == 0) ? "playful_mischief" : "confused";
+          touchRefractoryWindow = random(8000, 12000); // 8 to 12 second cool-down
+          Serial.printf("\n[TOUCH-DYNAMICS] Over-petted (Streak %d)! Tickle reaction '%s', Refractory: %lu ms\n", 
+                        touchStreakCount, behaviorToTrigger, touchRefractoryWindow);
+        } else if (touchStreakCount == 2 || touchStreakCount == 3) {
+          // CONTINUOUS PETTING: Affection response
+          behaviorToTrigger = d.touchHead ? "happy" : "curious_idle";
+          touchRefractoryWindow = random(3000, 5000); // 3 to 5 second window
+          Serial.printf("\n[TOUCH-DYNAMICS] Continuous petting (Streak %d): '%s', Refractory: %lu ms\n", 
+                        touchStreakCount, behaviorToTrigger, touchRefractoryWindow);
+        } else {
+          // FIRST TOUCH: Initial friendly reaction
+          behaviorToTrigger = d.touchHead ? "happy" : "shy_happy";
+          touchRefractoryWindow = random(3500, 6500); // 3.5 to 6.5 second window
+          Serial.printf("\n[TOUCH-DYNAMICS] Initial touch (Streak 1): '%s', Refractory: %lu ms\n", 
+                        behaviorToTrigger, touchRefractoryWindow);
+        }
+
+        // Queue reaction with organic delay (50ms - 180ms)
+        pendingTouchReaction = true;
+        pendingTouchBehavior = behaviorToTrigger;
+        touchReactionTargetTime = now + random(50, 180);
       }
-      activityDetected = true;
     } 
 
     // Skip sensor triggers if web UI just sent a behavior command (let it play fully)

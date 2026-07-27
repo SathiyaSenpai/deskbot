@@ -340,6 +340,12 @@ void testAudioSystems() {
 
 // --- SETUP ---
 void setup() {
+  // Configure WDT FIRST — extends timeout from default 5s to 30s
+  // This prevents WDT resets during WiFi connect, I2C probe, and audio init
+  esp_task_wdt_init(30, false);
+  esp_task_wdt_add(NULL); // Subscribe main task to WDT
+  esp_task_wdt_reset();   // Feed immediately
+
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   Serial.begin(115200);
   delay(500);
@@ -376,12 +382,11 @@ void setup() {
   
   Serial.printf("[MEM] Post-Init Free Heap: %d bytes | Max Alloc Block: %d bytes\n", 
                 ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-
-  // Disable default WDT and use manual feeding during sleep
-  esp_task_wdt_init(30, false); // 30 second timeout, don't panic on timeout
 }
 
 void loop() {
+  esp_task_wdt_reset(); // Feed WDT every loop — prevents reset under heavy load
+
   static unsigned long lastTime = 0;
   static unsigned long lastWiFiCheck = 0;
   unsigned long now = millis();

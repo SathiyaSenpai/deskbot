@@ -469,13 +469,15 @@ void loop() {
   static unsigned long lastMotionTrigger = 0;
   static unsigned long lastVolumeTrigger = 0;
   static bool previousMotionState = false;
-  static bool motionPresenceActive = false; // Tracks if someone is present (with hold time)
-  static unsigned long motionStartTime = 0;
-  static unsigned long lastMotionHigh = 0; // Last time PIR was HIGH
   static unsigned long lastIdleMovement = 0;
-  const unsigned long MOTION_CONTINUOUS_RETRIGGER = 300000; // 5 minutes for continuous presence
-  const unsigned long MOTION_HOLD_TIME = 10000; // 10 sec - ignore brief LOW periods (person still there)
-  const unsigned long MOTION_AWAY_CONFIRM = 15000; // 15 sec of no motion = person left
+  
+  // DYNAMIC MOTION DYNAMICS STATE
+  static unsigned long lastMotionTriggerTime = 0;
+  static unsigned long motionRefractoryWindow = 0;
+  static unsigned long nextPresenceGlanceTime = 0;
+  static bool motionPresenceActive = false;
+  static unsigned long motionStartTime = 0;
+  static unsigned long lastMotionHighTime = 0;
   
   // DYNAMIC TOUCH DYNAMICS STATE
   static unsigned long lastTouchTime = 0;
@@ -561,47 +563,49 @@ void loop() {
       webBehaviorActive = false;
     }
 
-    // 2. MOTION (smart presence detection - ignores small movements when present)
-    // Track when PIR was last HIGH
+    // 2. DYNAMIC PIR MOTION DYNAMICS
     if (d.motion) {
-      lastMotionHigh = now;
+      lastMotionHighTime = now;
     }
     
-    // Determine if someone is truly present (with hold time to ignore flickers)
-    bool wasPresent = motionPresenceActive;
-    
+    bool wasMotionPresent = motionPresenceActive;
     if (d.motion && !motionPresenceActive) {
-      // New person arrived
       motionPresenceActive = true;
       motionStartTime = now;
+      nextPresenceGlanceTime = now + random(15000, 35000); // Initial presence glance timing
     } else if (!d.motion && motionPresenceActive) {
-      // PIR went LOW - but is person still there? (small movements cause brief LOW)
-      if (now - lastMotionHigh > MOTION_AWAY_CONFIRM) {
-        // No motion for 15 sec = person left
+      if (now - lastMotionHighTime > 15000) { // 15s departure confirmation window
         motionPresenceActive = false;
-        Serial.println("[MOTION] Person left (15s no motion)");
+        Serial.println(F("[MOTION-DYNAMICS] Person departed (15s no motion)"));
       }
-      // Otherwise, keep motionPresenceActive = true (person still there, just not moving)
     }
-    
-    // Only trigger on TRUE new arrival (not small movements while present)
-    bool isNewArrival = motionPresenceActive && !wasPresent;
-    bool continuousPresenceRetrigger = motionPresenceActive && wasPresent && 
-                                       (now - motionStartTime > MOTION_CONTINUOUS_RETRIGGER);
-    
-    if (allowSensorTrigger && (isNewArrival || continuousPresenceRetrigger) && 
-        (now - lastMotionTrigger > MOTION_COOLDOWN)) {
-       if (!activeBehavior || (strcmp(activeBehavior->name, "surprised") != 0 && strcmp(activeBehavior->name, "listening") != 0)) {
-          if (isNewArrival) {
-            Serial.println("\n[MOTION] NEW PERSON ARRIVED!");
-          } else {
-            Serial.println("\n[MOTION] CONTINUOUS PRESENCE RE-TRIGGER (5+ min)");
-            motionStartTime = now; // Reset timer
-          }
-          startBehavior("surprised", now);
-          lastMotionTrigger = now;
-       }
-       activityDetected = true;
+
+    bool isNewArrival = motionPresenceActive && !wasMotionPresent;
+    bool isPresenceGlanceDue = motionPresenceActive && wasMotionPresent && (now >= nextPresenceGlanceTime);
+
+    // NON-CONFLICT SAFEGUARD: Motion MUST NOT override touch sensing, touch refractory windows, or web commands!
+    bool touchActiveOrRefractory = (pendingTouchReaction || (now - lastTouchTime < touchRefractoryWindow));
+    bool allowMotionTrigger = allowSensorTrigger && !touchActiveOrRefractory;
+
+    if (allowMotionTrigger && (now - lastMotionTriggerTime >= motionRefractoryWindow)) {
+      if (isNewArrival) {
+        lastMotionTriggerTime = now;
+        motionRefractoryWindow = random(4000, 8000); // 4 to 8 second arrival refractory
+        const char* arrivalBehavior = (random(0, 2) == 0) ? "curious_idle" : "surprised";
+        Serial.printf("\n[MOTION-DYNAMICS] New arrival -> '%s' (Refractory: %lu ms)\n", 
+                      arrivalBehavior, motionRefractoryWindow);
+        startBehavior(arrivalBehavior, now);
+        activityDetected = true;
+      } 
+      else if (isPresenceGlanceDue && activeBehavior && strcmp(activeBehavior->name, "calm_idle") == 0) {
+        lastMotionTriggerTime = now;
+        nextPresenceGlanceTime = now + random(20000, 45000); // Schedule next glance 20-45s later
+        motionRefractoryWindow = random(3000, 6000);
+        Serial.printf("\n[MOTION-DYNAMICS] Presence glance -> 'curious_idle' (Next glance in %lu ms)\n", 
+                      nextPresenceGlanceTime - now);
+        startBehavior("curious_idle", now);
+        activityDetected = true;
+      }
     }
     
     previousMotionState = d.motion; // Update raw motion state for debugging

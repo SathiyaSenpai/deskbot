@@ -303,6 +303,13 @@ wss.on('connection', (ws, req) => {
                         }));
                     }
                 }
+                // Handle Hardware I2S Mic Trigger
+                else if (msg.type === 'trigger_listening') {
+                    if (robotWs && robotWs.readyState === 1) {
+                        robotWs.send(JSON.stringify({ type: 'wake_up' }));
+                        robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'listening' }));
+                    }
+                }
                 // Handle Chat
                 else if (msg.type === 'chat_message') {
                     console.log(`💬 User: ${msg.text}`);

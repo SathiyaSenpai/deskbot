@@ -483,106 +483,36 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
   
-  // Record browser microphone audio and send to /stt endpoint
+  // Hardware I2S Microphone (INMP441) Controls
   const micButton = document.getElementById('micButton');
   const micIcon = micButton?.querySelector('.mic-icon');
   const micStatus = micButton?.querySelector('.mic-status');
 
   if (micButton) {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      micButton.title = 'Microphone not available in this browser';
-      micButton.style.opacity = '0.5';
-      micButton.onclick = () => alert('Microphone access requires HTTPS or localhost.\nYou can still type messages below!');
-      console.log('[MIC] getUserMedia not available');
-    } else {
-      let mediaRecorder = null;
-      let audioChunks = [];
-      let isListening = false;
+    micButton.title = 'Robot Hardware I2S Microphone Active (INMP441)';
+    micButton.style.opacity = '1';
 
-      micButton.title = 'Click to speak (Sarvam AI - Saarika STT)';
-      micButton.style.opacity = '1';
+    micButton.onclick = () => {
+      if (!state.isConnected) {
+        alert('Not connected to server');
+        return;
+      }
 
-      micButton.onclick = async () => {
-        if (!state.isConnected) {
-          alert('Not connected to server');
-          return;
-        }
+      // Command ESP32 Hardware I2S mic into active listening mode
+      state.ws.send(JSON.stringify({ type: 'trigger_listening' }));
+      triggerBehavior('listening');
 
-        if (isListening) {
-          // Stop recording
-          mediaRecorder.stop();
-          return;
-        }
+      micButton.classList.add('listening');
+      if (micIcon) micIcon.textContent = '🎙️';
+      if (micStatus) micStatus.textContent = 'Listening...';
 
-        // Start recording
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-          audioChunks = [];
-
-          // Prefer WAV; fall back to whatever the browser supports
-          const mimeType = MediaRecorder.isTypeSupported('audio/wav')
-            ? 'audio/wav'
-            : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-              ? 'audio/ogg;codecs=opus'
-              : 'audio/webm;codecs=opus';
-
-          mediaRecorder = new MediaRecorder(stream, { mimeType });
-
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-          };
-
-          mediaRecorder.onstop = async () => {
-            isListening = false;
-            micButton.classList.remove('listening');
-            if (micIcon) micIcon.textContent = '🎤';
-            if (micStatus) micStatus.textContent = 'Processing...';
-            stream.getTracks().forEach(t => t.stop()); // release mic
-
-            try {
-              const blob = new Blob(audioChunks, { type: mimeType });
-              console.log(`[MIC] Sending ${blob.size} bytes to Sarvam STT (${mimeType})`);
-
-              const formData = new FormData();
-              formData.append('audio', blob, 'recording.' + (mimeType.includes('wav') ? 'wav' : mimeType.includes('ogg') ? 'ogg' : 'webm'));
-
-              const resp = await fetch('/stt', { method: 'POST', body: formData });
-              const result = await resp.json();
-
-              if (!resp.ok) throw new Error(result.error || 'STT failed');
-
-              const transcript = result.transcript?.trim();
-              console.log(`[MIC] Sarvam STT: "${transcript}"`);
-
-              if (transcript) {
-                addMessage(transcript, 'user');
-                if (state.ws && state.isConnected) {
-                  state.ws.send(JSON.stringify({ type: 'chat_message', text: transcript }));
-                }
-                if (micStatus) micStatus.textContent = '';
-              } else {
-                if (micStatus) { micStatus.textContent = 'No speech detected'; setTimeout(() => { micStatus.textContent = ''; }, 2000); }
-              }
-            } catch (err) {
-              console.error('[MIC] STT error:', err);
-              if (micStatus) { micStatus.textContent = `Error: ${err.message}`; setTimeout(() => { micStatus.textContent = ''; }, 3000); }
-            }
-          };
-
-          mediaRecorder.start();
-          isListening = true;
-          micButton.classList.add('listening');
-          if (micIcon) micIcon.textContent = '🔴';
-          if (micStatus) micStatus.textContent = 'Listening... (tap to stop)';
-          console.log('[MIC] Recording started with Sarvam Saarika STT');
-        } catch (err) {
-          console.error('[MIC] Failed to start recording:', err);
-          if (micStatus) { micStatus.textContent = err.name === 'NotAllowedError' ? 'Mic permission denied' : `Error: ${err.message}`; setTimeout(() => { micStatus.textContent = ''; }, 3000); }
-        }
-      };
-      console.log('[MIC] Sarvam STT mic ready');
-    } // end else (getUserMedia available)
-  } // end if (micButton)
+      setTimeout(() => {
+        micButton.classList.remove('listening');
+        if (micIcon) micIcon.textContent = '🎤';
+        if (micStatus) micStatus.textContent = '';
+      }, 4000);
+    };
+  }
   
   // Servo buttons
   const servoLeft = document.getElementById('servoLeft');

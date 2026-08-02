@@ -139,7 +139,7 @@ async function chatWithOllama(userMessage) {
 
   let langInstruction = '';
   if (AI_CONFIG.preferredLanguage === 'ta') {
-    langInstruction = "\n\nCRITICAL LANGUAGE RULE: The user selected TAMIL. You MUST reply ONLY in simple, natural, spoken daily Tamil script (எளிய பேச்சுத் தமிழ்). Keep it short (1-2 sentences). Use natural conversational words like 'வணக்கம்! நான் நிஸ்யா, நல்லா இருக்கேன்!'. Avoid formal bookish or complex words.";
+    langInstruction = "\n\nCRITICAL LANGUAGE RULE: The user selected TAMIL. Reply ONLY in \"Tanglish\" - natural conversational Tamil mixed with English words, written in Tamil script where possible. Keep it short (1-2 sentences). DO NOT use pure literary Tamil. Examples: \"Hello! நான் Nisya. எப்படி இருக்கீங்க? இன்னைக்கு உங்க day எப்படி போகுது?\" or \"Super-ஆ இருக்கு! நாம ஒரு game விளையாடலாமா?\"";
   } else if (AI_CONFIG.preferredLanguage === 'hi') {
     langInstruction = "\n\nCRITICAL LANGUAGE RULE: The user selected HINDI language in the dashboard. You MUST reply ONLY in natural conversational HINDI (हिंदी) script!";
   } else {

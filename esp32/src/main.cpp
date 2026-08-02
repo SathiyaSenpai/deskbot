@@ -701,7 +701,7 @@ void loop() {
       }
       
       // Stream audio chunk to websocket if connected
-      if (robotWs.isConnected() && micMgr.isReady() && (now - lastVolumeTrigger < 4000)) {
+      if (robotWs.isConnected() && micMgr.isReady() && (activeBehavior != nullptr && strcmp(activeBehavior->name, "listening") == 0)) {
         uint8_t pcmBuf[256];
         size_t bytesRead = micMgr.readChunk(pcmBuf, sizeof(pcmBuf));
         if (bytesRead > 0) {

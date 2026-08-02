@@ -139,7 +139,7 @@ async function chatWithOllama(userMessage) {
 
   let langInstruction = '';
   if (AI_CONFIG.preferredLanguage === 'ta') {
-    langInstruction = "\n\nCRITICAL LANGUAGE RULE: The user selected TAMIL language in the dashboard. You MUST reply ONLY in natural conversational TAMIL (தமிழ்) script!";
+    langInstruction = "\n\nCRITICAL LANGUAGE RULE: The user selected TAMIL. You MUST reply ONLY in simple, natural, spoken daily Tamil script (எளிய பேச்சுத் தமிழ்). Keep it short (1-2 sentences). Use natural conversational words like 'வணக்கம்! நான் நிஸ்யா, நல்லா இருக்கேன்!'. Avoid formal bookish or complex words.";
   } else if (AI_CONFIG.preferredLanguage === 'hi') {
     langInstruction = "\n\nCRITICAL LANGUAGE RULE: The user selected HINDI language in the dashboard. You MUST reply ONLY in natural conversational HINDI (हिंदी) script!";
   } else {
@@ -225,7 +225,7 @@ export async function textToSpeech(text, outputFile = null) {
   }
 
   if (AI_CONFIG.preferredLanguage === 'ta') {
-    console.log('[TTS] Using Piper TTS (Roja voice for Tamil)...');
+    console.log('[TTS] Using Piper TTS (HemaLatha voice for Tamil @ 55% volume)...');
     try {
       const result = await piperTamilTTS(text, outputFile);
       if (result.success) return result;
@@ -259,7 +259,7 @@ async function piperTamilTTS(text, outputFile = null) {
   const outputPath = path.join(AI_CONFIG.tts.outputDir, filename);
 
   return new Promise((resolve, reject) => {
-    const args = ['--model', modelPath, '--output_file', outputPath];
+    const args = ['--model', modelPath, '--output_file', outputPath, '--volume', '0.55'];
     if (fs.existsSync(modelConfigPath)) {
       args.push('--config', modelConfigPath);
     }

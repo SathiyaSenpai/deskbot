@@ -320,8 +320,19 @@ wss.on('connection', (ws, req) => {
                     const emotion = detectEmotion(reply);
                     console.log(`🎭 Detected emotion: ${emotion}`);
                     
-                    // Reply to Web
-                    ws.send(JSON.stringify({ type: 'chat_response', text: reply }));
+                    const audioUrl = audio.audioFile ? `http://${SERVER_IP}:${PORT}${audio.audioFile}` : null;
+                    
+                    // Reply to all Web Controllers
+                    for (const controller of controllers) {
+                        if (controller.readyState === 1) {
+                            controller.send(JSON.stringify({ 
+                                type: 'chat_response', 
+                                text: reply,
+                                audio_url: audioUrl,
+                                emotion: emotion
+                            }));
+                        }
+                    }
                     
                     // Command Robot to speak with emotion
                     if (audio.audioFile) {
@@ -341,7 +352,7 @@ wss.on('connection', (ws, req) => {
                             robotWs.send(JSON.stringify({ 
                                 type: 'play_audio', 
                                 text: reply,  // Send text for local TTS
-                                url: `http://${SERVER_IP}:${PORT}${audio.audioFile}`
+                                url: audioUrl
                             }));
                             
                             // Keep robot awake for 25 seconds with random movements

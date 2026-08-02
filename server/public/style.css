@@ -1111,6 +1111,24 @@ body {
   align-self: flex-end;
 }
 
+.speech-btn {
+  background: rgba(108, 92, 231, 0.12);
+  border: 1px solid rgba(108, 92, 231, 0.3);
+  color: #6c5ce7;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.speech-btn:hover {
+  background: #6c5ce7;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
 .input-bar {
   display: flex;
   gap: 10px;

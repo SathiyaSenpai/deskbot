@@ -63,13 +63,13 @@ export const AI_CONFIG = {
 
   kokoro: {
     modelFile: process.env.KOKORO_MODEL ||
-               (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'kokoro/kokoro-v1.0.onnx') : path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/kokoro-v1.0.onnx')),
+               path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/model.onnx'),
     voicesFile: process.env.KOKORO_VOICES ||
-                (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'kokoro/voices-v1.0.bin') : path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/voices-v1.0.bin')),
+                path.join(process.env.HOME || '/home/sathya', '.local/share/kokoro/voices.bin'),
     voice: process.env.KOKORO_VOICE || 'af_heart',
     speed: 1.05,
     lang: 'en-us',
-    pythonBin: process.env.PYTHON_BIN || 'python3',
+    pythonBin: process.env.PYTHON_BIN || (fs.existsSync(path.join(__dirname, '../venv/bin/python')) ? path.join(__dirname, '../venv/bin/python') : 'python3'),
   },
 
   piper: {
@@ -147,13 +147,13 @@ async function chatWithOllama(userMessage) {
     body: JSON.stringify({
       model: cfg.model,
       stream: false,
+      think: false,
       messages: [
         { role: 'system', content: AI_CONFIG.systemPrompt + langInstruction },
         ...conversationHistory.slice(-MAX_HISTORY),
         { role: 'user', content: userMessage },
       ],
       options: { temperature: cfg.temperature, num_predict: cfg.num_predict, stop: ['\n\n'] },
-      think: false,
     }),
   });
 

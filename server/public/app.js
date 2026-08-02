@@ -302,7 +302,7 @@ function connect() {
     }
     // Chat response
     else if (msg.type === 'chat_response') {
-      addMessage(msg.text, 'robot');
+      addMessage(msg.text, 'robot', msg.audio_url);
     }
   };
 
@@ -350,9 +350,7 @@ function updateSensors(data) {
   }
 
   if (elements.sensorTemp) {
-    elements.sensorTemp.innerText = (data.temperature !== undefined && data.temperature > 0) 
-      ? `${data.temperature.toFixed(1)} °C` 
-      : '24.0 °C';
+    elements.sensorTemp.innerText = data.temperature ? `${data.temperature.toFixed(1)} °C` : 'N/A';
   }
   
   if (elements.sensorLight) {
@@ -367,15 +365,60 @@ function updateSensors(data) {
   }
 }
 
-function addMessage(text, type) {
+function addMessage(text, type, audioUrl = null) {
   const div = document.createElement('div');
   div.className = `message ${type}`;
+  
+  let speechBtn = '';
+  if (type === 'robot') {
+    speechBtn = `<button class="speech-btn" onclick="playSpeechText(this, '${encodeURIComponent(text)}', '${audioUrl || ''}')">🔊 Speak</button>`;
+  }
+  
   div.innerHTML = `
     <div class="message-content">${text}</div>
-    <div class="message-time">Just now</div>
+    <div class="message-meta" style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+      <span class="message-time" style="font-size:0.75rem; opacity:0.7;">Just now</span>
+      ${speechBtn}
+    </div>
   `;
   elements.chat.appendChild(div);
   elements.chat.scrollTop = elements.chat.scrollHeight;
+
+  // Auto-play speech for robot responses
+  if (type === 'robot') {
+    playSpeechText(null, encodeURIComponent(text), audioUrl);
+  }
+}
+
+window.playSpeechText = (btnEl, encodedText, audioUrl) => {
+  const text = decodeURIComponent(encodedText);
+  if (audioUrl && audioUrl !== 'null' && audioUrl !== 'undefined') {
+    const audio = new Audio(audioUrl);
+    audio.play().catch(err => {
+      console.warn('[SPEECH] Kokoro audio playback blocked or pending, using WebSpeech API fallback:', err);
+      speakWebSpeech(text);
+    });
+  } else {
+    speakWebSpeech(text);
+  }
+};
+
+function speakWebSpeech(text) {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{27BF}]/gu, '').trim();
+    if (!cleanText) return;
+    
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.25; // Expressive high pitch for Nisya!
+    
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Zira') || v.name.includes('Samantha')));
+    if (femaleVoice) utterance.voice = femaleVoice;
+    
+    window.speechSynthesis.speak(utterance);
+  }
 }
 
 // Commands

@@ -172,6 +172,9 @@ async function processMicAudioStream() {
     isProcessingMicAudio = true;
     micActiveStreaming = false;
 
+    // Tell dashboard mic is no longer active
+    broadcast({ type: 'mic_active', active: false });
+
     // Tell robot to stop streaming and switch to thinking state
     if (robotWs && robotWs.readyState === 1) {
         robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'thinking' }));
@@ -198,6 +201,8 @@ async function processMicAudioStream() {
         if (transcript && transcript.trim().length > 0) {
             // Broadcast what the user said
             broadcast({ type: 'user_speech', text: transcript });
+            // Show AI thinking bubble
+            broadcast({ type: 'ai_thinking' });
 
             const reply = await chat(transcript);
             const audio = await textToSpeech(reply);
@@ -242,6 +247,14 @@ function handleMicAudioChunk(chunk) {
         micStreamStartTime = Date.now();
         micAudioBuffer = [];
         console.log(`[MIC-VAD] Voice start detected (RMS: ${rms.toFixed(0)})`);
+        // Notify dashboard that mic is live
+        broadcast({ type: 'mic_active', active: true });
+    }
+
+    // Broadcast RMS level for waveform animation in dashboard (throttled)
+    if (Date.now() - (handleMicAudioChunk._lastRmsBroadcast || 0) > 80) {
+        handleMicAudioChunk._lastRmsBroadcast = Date.now();
+        broadcast({ type: 'mic_rms', rms: Math.min(100, Math.round(rms / 40)) });
     }
 
     micAudioBuffer.push(Buffer.from(chunk)); // always copy binary chunks

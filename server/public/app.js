@@ -302,11 +302,38 @@ function connect() {
     }
     // Chat response from robot
     else if (msg.type === 'chat_response') {
+      removeThinkingBubble();
       addMessage(msg.text, 'robot', msg.audio_url);
     }
     // User speech transcription (from mic)
     else if (msg.type === 'user_speech') {
       addMessage(msg.text, 'user');
+    }
+    // Hardware mic voice detection — show/hide waveform visualizer
+    else if (msg.type === 'mic_active') {
+      const waveform = document.getElementById('micWaveform');
+      if (waveform) {
+        if (msg.active) {
+          waveform.classList.add('active');
+          // Scroll to bottom so waveform is visible
+          elements.chat.scrollTop = elements.chat.scrollHeight;
+        } else {
+          waveform.classList.remove('active');
+        }
+      }
+    }
+    // Mic RMS level — animate waveform bar heights in real time
+    else if (msg.type === 'mic_rms') {
+      const bars = document.querySelectorAll('.waveform-bar');
+      bars.forEach((bar, i) => {
+        const variance = (Math.random() * 0.6 + 0.4);
+        const height = Math.max(6, Math.min(32, msg.rms * variance * 0.8));
+        bar.style.height = `${height}px`;
+      });
+    }
+    // AI thinking — show a grayed thinking bubble
+    else if (msg.type === 'ai_thinking') {
+      showThinkingBubble();
     }
   };
 
@@ -367,6 +394,31 @@ function updateSensors(data) {
   if (elements.sensorMotion) {
     elements.sensorMotion.innerText = data.motion ? 'Detected' : 'Clear';
   }
+}
+
+// Show/remove thinking bubble
+let thinkingBubble = null;
+
+function showThinkingBubble() {
+  removeThinkingBubble(); // Only ever one at a time
+  const div = document.createElement('div');
+  div.className = 'message robot thinking';
+  div.id = 'thinkingBubble';
+  div.innerHTML = `
+    <div class="message-content">
+      Nisya is thinking
+      <span class="thinking-dots"><span></span><span></span><span></span></span>
+    </div>
+  `;
+  elements.chat.appendChild(div);
+  elements.chat.scrollTop = elements.chat.scrollHeight;
+  thinkingBubble = div;
+}
+
+function removeThinkingBubble() {
+  const existing = document.getElementById('thinkingBubble');
+  if (existing) existing.remove();
+  thinkingBubble = null;
 }
 
 function addMessage(text, type, audioUrl = null) {

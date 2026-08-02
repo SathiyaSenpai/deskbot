@@ -146,6 +146,9 @@ async function chatWithOllama(userMessage) {
     langInstruction = "\n\nCRITICAL LANGUAGE RULE: Reply in clean conversational ENGLISH.";
   }
 
+  const now = new Date();
+  const dateContext = `\n\n[SYSTEM CONTEXT]\nCurrent Date & Time: ${now.toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}\nUse this context to accurately answer questions about today's day, date, or time.`;
+
   const res = await fetch(`${cfg.url}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -154,7 +157,7 @@ async function chatWithOllama(userMessage) {
       stream: false,
       think: false,
       messages: [
-        { role: 'system', content: AI_CONFIG.systemPrompt + langInstruction },
+        { role: 'system', content: AI_CONFIG.systemPrompt + langInstruction + dateContext },
         ...conversationHistory.slice(-MAX_HISTORY),
         { role: 'user', content: userMessage },
       ],

@@ -74,9 +74,14 @@ export const AI_CONFIG = {
 
   piper: {
     modelDir: process.env.PIPER_MODEL_DIR ||
-              (EXT_AI_ROOT ? path.join(EXT_AI_ROOT, 'piper') : path.join(process.env.HOME || '/home/sathya', '.local/share/piper')),
-    tamilModel: process.env.PIPER_TAMIL_MODEL || 'ta_IN-roja-medium',
-    executable: process.env.PIPER_BIN || 'piper',
+              (fs.existsSync(path.join(process.env.HOME || '/home/sathya', '.local/share/piper/ta_IN-HemaLatha-medium'))
+               ? path.join(process.env.HOME || '/home/sathya', '.local/share/piper/ta_IN-HemaLatha-medium')
+               : path.join(process.env.HOME || '/home/sathya', '.local/share/piper')),
+    tamilModel: process.env.PIPER_TAMIL_MODEL || 'ta_IN-HemaLatha-medium',
+    executable: process.env.PIPER_BIN ||
+                (fs.existsSync(path.join(__dirname, '../venv/bin/piper'))
+                 ? path.join(__dirname, '../venv/bin/piper')
+                 : 'piper'),
   },
 
   tts: { outputDir: path.join(__dirname, 'audio') },

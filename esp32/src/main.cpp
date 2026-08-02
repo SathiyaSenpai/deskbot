@@ -267,9 +267,16 @@ void processWebSocketMessage(const WsQueueMessage& msg) {
       #if ENABLE_MICROPHONE
       micMgr.stopRecording(); // Time-multiplexing: stop mic driver during audio playback
       #endif
-      startBehavior("listening");
+      startBehavior("calm_idle"); // Do NOT set listening here — prevents mic loop
       audioMgr.playURL(msg.data);
       lastInteractionTime = millis();
+      break;
+    case WS_MSG_STOP_LISTENING:
+      // Server has received our audio and is now processing — stop streaming and go idle
+      #if ENABLE_MICROPHONE
+      micMgr.stopRecording();
+      #endif
+      startBehavior("thinking");
       break;
     case WS_MSG_REQUEST_STATE:
       if (activeBehavior && robotWs.isConnected()) {

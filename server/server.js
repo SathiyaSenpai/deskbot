@@ -122,13 +122,30 @@ console.log(`📡 IP MUST BE IN CONFIG.H: Check 'ipconfig' or use: ${SERVER_IP}\
 // Handle incoming PCM audio stream from ESP32 mic
 let micAudioBuffer = [];
 let micAudioTimeout = null;
+let silenceTimeout = null;
 let isProcessingMicAudio = false;
+let micActiveStreaming = false;
+
+// RMS energy of a PCM int16 buffer
+function getPcmRms(chunk) {
+    const samples = chunk.length / 2;
+    let sum = 0;
+    for (let i = 0; i < chunk.length - 1; i += 2) {
+        const s = chunk.readInt16LE(i);
+        sum += s * s;
+    }
+    return samples > 0 ? Math.sqrt(sum / samples) : 0;
+}
+
+const VAD_SILENCE_THRESHOLD = 200;  // RMS below this = silence
+const VAD_SILENCE_MS       = 900;   // silence for 900ms = end of speech
+const VAD_MAX_DURATION_MS  = 7000;  // hard cap 7 seconds
+let micStreamStartTime = 0;
 
 function createWavHeader(dataLength, sampleRate = 16000, numChannels = 1, bitsPerSample = 16) {
     const buffer = Buffer.alloc(44);
     const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
     const blockAlign = numChannels * (bitsPerSample / 8);
-
     buffer.write('RIFF', 0);
     buffer.writeUInt32LE(36 + dataLength, 4);
     buffer.write('WAVE', 8);
@@ -142,35 +159,46 @@ function createWavHeader(dataLength, sampleRate = 16000, numChannels = 1, bitsPe
     buffer.writeUInt16LE(bitsPerSample, 34);
     buffer.write('data', 36);
     buffer.writeUInt32LE(dataLength, 40);
-
     return buffer;
 }
 
 async function processMicAudioStream() {
-    if (micAudioBuffer.length === 0 || isProcessingMicAudio) return;
+    if (micAudioTimeout) { clearTimeout(micAudioTimeout); micAudioTimeout = null; }
+    if (silenceTimeout)  { clearTimeout(silenceTimeout);  silenceTimeout  = null; }
+    if (micAudioBuffer.length === 0 || isProcessingMicAudio) {
+        micActiveStreaming = false;
+        return;
+    }
     isProcessingMicAudio = true;
+    micActiveStreaming = false;
+
+    // Tell robot to stop streaming and switch to thinking state
+    if (robotWs && robotWs.readyState === 1) {
+        robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'thinking' }));
+        robotWs.send(JSON.stringify({ type: 'stop_listening' }));
+    }
 
     try {
         const rawPcm = Buffer.concat(micAudioBuffer);
-        micAudioBuffer = []; // Reset buffer
+        micAudioBuffer = [];
 
-        if (rawPcm.length < 3200) { // Ignore chunks shorter than 100ms
+        if (rawPcm.length < 6400) { // Ignore clips shorter than 200ms
+            console.log(`[MIC] Audio too short (${rawPcm.length} bytes), ignoring`);
             isProcessingMicAudio = false;
             return;
         }
 
-        console.log(`🎙️ Processing mic audio: ${rawPcm.length} bytes PCM...`);
+        console.log(`🎙️ Processing mic audio: ${rawPcm.length} bytes PCM (${(rawPcm.length/32000).toFixed(1)}s)...`);
         const header = createWavHeader(rawPcm.length, 16000, 1, 16);
         const wavBuffer = Buffer.concat([header, rawPcm]);
-
-        if (robotWs && robotWs.readyState === 1) {
-            robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'thinking' }));
-        }
 
         const transcript = await speechToText(wavBuffer, 'audio/wav');
         console.log(`🗣️ Transcribed Voice: "${transcript}"`);
 
         if (transcript && transcript.trim().length > 0) {
+            // Broadcast what the user said
+            broadcast({ type: 'user_speech', text: transcript });
+
             const reply = await chat(transcript);
             const audio = await textToSpeech(reply);
             const emotion = detectEmotion(reply);
@@ -178,31 +206,64 @@ async function processMicAudioStream() {
             broadcast({ type: 'chat_response', text: reply });
 
             if (audio.audioFile && robotWs && robotWs.readyState === 1) {
-                let expressionBehavior = emotion || 'happy';
-                robotWs.send(JSON.stringify({ type: 'set_behavior', name: expressionBehavior }));
+                robotWs.send(JSON.stringify({ type: 'set_behavior', name: emotion || 'happy' }));
                 robotWs.send(JSON.stringify({
                     type: 'play_audio',
                     text: reply,
                     url: `http://${SERVER_IP}:${PORT}${audio.audioFile}`
                 }));
             }
+        } else {
+            console.log('[MIC] Empty transcript, returning to idle');
+            if (robotWs && robotWs.readyState === 1) {
+                robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'calm_idle' }));
+            }
         }
     } catch (err) {
         console.error('❌ Mic audio processing error:', err.message);
+        if (robotWs && robotWs.readyState === 1) {
+            robotWs.send(JSON.stringify({ type: 'set_behavior', name: 'calm_idle' }));
+        }
     } finally {
         isProcessingMicAudio = false;
     }
 }
 
 function handleMicAudioChunk(chunk) {
-    micAudioBuffer.push(chunk);
+    // Ignore new chunks while already processing previous speech
+    if (isProcessingMicAudio) return;
 
-    if (micAudioTimeout) clearTimeout(micAudioTimeout);
-    micAudioTimeout = setTimeout(processMicAudioStream, 800);
+    const rms = getPcmRms(chunk);
 
+    if (!micActiveStreaming) {
+        // Gate: only start accumulating when voice is detected
+        if (rms < VAD_SILENCE_THRESHOLD) return;
+        micActiveStreaming = true;
+        micStreamStartTime = Date.now();
+        micAudioBuffer = [];
+        console.log(`[MIC-VAD] Voice start detected (RMS: ${rms.toFixed(0)})`);
+    }
+
+    micAudioBuffer.push(Buffer.from(chunk)); // always copy binary chunks
+
+    // Reset silence timer on each chunk above threshold
+    if (rms > VAD_SILENCE_THRESHOLD) {
+        if (silenceTimeout) { clearTimeout(silenceTimeout); silenceTimeout = null; }
+    } else {
+        // Silence detected — schedule end-of-speech
+        if (!silenceTimeout) {
+            silenceTimeout = setTimeout(() => {
+                console.log('[MIC-VAD] Silence detected — processing speech');
+                processMicAudioStream();
+            }, VAD_SILENCE_MS);
+        }
+    }
+
+    // Hard cap
     const totalBytes = micAudioBuffer.reduce((sum, buf) => sum + buf.length, 0);
-    if (totalBytes >= 16000 * 2 * 5) { // Max 5 seconds
-        if (micAudioTimeout) clearTimeout(micAudioTimeout);
+    const elapsed = Date.now() - micStreamStartTime;
+    if (totalBytes >= 16000 * 2 * 7 || elapsed > VAD_MAX_DURATION_MS) {
+        console.log('[MIC-VAD] Max duration reached — processing speech');
         processMicAudioStream();
     }
 }

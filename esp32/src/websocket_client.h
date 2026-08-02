@@ -23,7 +23,8 @@ enum WsMessageType {
   WS_MSG_STOPWATCH_RESET,
   WS_MSG_SET_ALARM,
   WS_MSG_DISMISS_ALARM,
-  WS_MSG_SYNC_TIME
+  WS_MSG_SYNC_TIME,
+  WS_MSG_STOP_LISTENING
 };
 
 // Queue message structure
@@ -132,6 +133,9 @@ private:
       if (timestamp) {
         strncpy(qMsg.data, timestamp, 127);
       }
+    }
+    else if (strcmp(msgType, "stop_listening") == 0) {
+      qMsg.type = WS_MSG_STOP_LISTENING;
     }
     else {
       sendToQueue = false;

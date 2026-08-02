@@ -300,9 +300,13 @@ function connect() {
     else if (msg.type === 'sensor_data') {
       updateSensors(msg);
     }
-    // Chat response
+    // Chat response from robot
     else if (msg.type === 'chat_response') {
       addMessage(msg.text, 'robot', msg.audio_url);
+    }
+    // User speech transcription (from mic)
+    else if (msg.type === 'user_speech') {
+      addMessage(msg.text, 'user');
     }
   };
 

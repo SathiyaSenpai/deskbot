@@ -9,17 +9,19 @@ const state = {
 };
 
 const elements = {
-  status: document.getElementById('connectionStatus'),
-  robotState: document.getElementById('robotState'),
-  eyeLeft: document.getElementById('eyeLeft'),
-  eyeRight: document.getElementById('eyeRight'),
-  sensorDist: document.getElementById('sensorDistance'),
-  sensorTouch: document.getElementById('sensorTouch'),
-  sensorTemp: document.getElementById('sensorTemp'),
-  chat: document.getElementById('chatMessages'),
-  input: document.getElementById('messageInput'),
-  sendBtn: document.getElementById('sendButton'),
-  langSelect: document.getElementById('languageSelect')
+  get status() { return document.getElementById('connectionStatus'); },
+  get robotState() { return document.getElementById('robotState'); },
+  get eyeLeft() { return document.getElementById('eyeLeft'); },
+  get eyeRight() { return document.getElementById('eyeRight'); },
+  get sensorDist() { return document.getElementById('sensorDistance'); },
+  get sensorTouch() { return document.getElementById('sensorTouch'); },
+  get sensorTemp() { return document.getElementById('sensorTemp'); },
+  get sensorLight() { return document.getElementById('sensorLight'); },
+  get sensorMotion() { return document.getElementById('sensorMotion'); },
+  get chat() { return document.getElementById('chatMessages'); },
+  get input() { return document.getElementById('messageInput'); },
+  get sendBtn() { return document.getElementById('sendButton'); },
+  get langSelect() { return document.getElementById('languageSelect'); }
 };
 
 // Behavior animation parameters synced with firmware
@@ -278,6 +280,12 @@ function connect() {
       else if (msg.event === 'sync_behavior') {
         setBehavior(msg.detail);
       }
+      else if (msg.event === 'alarm_set' || msg.event === 'alarm_triggered' || msg.event === 'alarm_dismissed') {
+        if (msg.detail) addMessage(`🔔 ${msg.detail}`, 'system');
+      }
+      else if (msg.event === 'connect') {
+        updateStatus('Robot Online', 'connected');
+      }
     }
     // Sync from button clicks (only if not from our own command)
     else if (msg.type === 'set_behavior') {
@@ -326,48 +334,37 @@ function setBehavior(name) {
 }
 
 function updateSensors(data) {
-  // Use readable text for distance
   if (elements.sensorDist) {
     const distance = data.distance_mm || 0;
-    if (distance === 0) {
-      elements.sensorDist.innerText = 'No reading';
-    } else if (distance < 100) {
-      elements.sensorDist.innerText = 'Very close';
-    } else if (distance < 300) {
-      elements.sensorDist.innerText = 'Near';
-    } else {
-      elements.sensorDist.innerText = 'Far';
-    }
+    if (distance === 0) elements.sensorDist.innerText = 'No reading';
+    else if (distance < 100) elements.sensorDist.innerText = `${distance} mm (Very close)`;
+    else if (distance < 350) elements.sensorDist.innerText = `${(distance/10).toFixed(0)} cm (Near)`;
+    else elements.sensorDist.innerText = `${(distance/10).toFixed(0)} cm (Far)`;
   }
   
   if (elements.sensorTouch) {
-    if (data.touch_head && data.touch_side) elements.sensorTouch.innerText = 'Both';
-    else if (data.touch_head) elements.sensorTouch.innerText = 'Head';
-    else if (data.touch_side) elements.sensorTouch.innerText = 'Side';
-    else elements.sensorTouch.innerText = 'No';
+    if (data.touch_head && data.touch_side) elements.sensorTouch.innerText = 'Head + Side';
+    else if (data.touch_head) elements.sensorTouch.innerText = 'Head Touch';
+    else if (data.touch_side) elements.sensorTouch.innerText = 'Side Touch';
+    else elements.sensorTouch.innerText = 'None';
   }
+
   if (elements.sensorTemp) {
     elements.sensorTemp.innerText = (data.temperature !== undefined && data.temperature > 0) 
       ? `${data.temperature.toFixed(1)} °C` 
       : '24.0 °C';
   }
   
-  const sensorLight = document.getElementById('sensorLight');
-  const sensorMotion = document.getElementById('sensorMotion');
-  
-  // Use readable text for light
-  if (sensorLight) {
+  if (elements.sensorLight) {
     const light = data.light || 0;
-    if (light > 2000) {
-      sensorLight.innerText = 'Dark';
-    } else if (light > 1000) {
-      sensorLight.innerText = 'Dim';
-    } else {
-      sensorLight.innerText = 'Bright';
-    }
+    if (light > 2500) elements.sensorLight.innerText = `Dark (${light})`;
+    else if (light > 1200) elements.sensorLight.innerText = `Dim (${light})`;
+    else elements.sensorLight.innerText = `Bright (${light})`;
   }
   
-  if (sensorMotion) sensorMotion.innerText = data.motion ? 'Yes' : 'No';
+  if (elements.sensorMotion) {
+    elements.sensorMotion.innerText = data.motion ? 'Detected' : 'Clear';
+  }
 }
 
 function addMessage(text, type) {
@@ -711,3 +708,15 @@ function syncTimeNow() {
     alert('Not connected to Nisya');
   }
 }
+
+// Expose functions globally for HTML onclick handlers
+window.stopwatchStart = stopwatchStart;
+window.stopwatchStop = stopwatchStop;
+window.stopwatchReset = stopwatchReset;
+window.setAlarm = setAlarm;
+window.dismissAlarm = dismissAlarm;
+window.syncTimeNow = syncTimeNow;
+window.testAudio = testAudio;
+window.triggerBehavior = triggerBehavior;
+window.controlServo = controlServo;
+window.setLED = setLED;

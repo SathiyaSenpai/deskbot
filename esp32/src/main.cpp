@@ -96,15 +96,19 @@ public:
       sequenceLength = 2;
     }
     else if (strcmp(name, "alarm") == 0) {
-      setNote(0, 2048, 150); setNote(1, 0, 100); setNote(2, 2048, 150); setNote(3, 0, 100); setNote(4, 2560, 300);
-      sequenceLength = 5;
+      // 16-note energetic alert melody (escalating C6 -> E6 -> G6 -> A6 fanfare)
+      setNote(0, 2093, 120); setNote(1, 0, 40); setNote(2, 2093, 120); setNote(3, 0, 100);
+      setNote(4, 2637, 120); setNote(5, 0, 40); setNote(6, 2637, 120); setNote(7, 0, 100);
+      setNote(8, 3136, 140); setNote(9, 0, 40); setNote(10, 3136, 140); setNote(11, 0, 40);
+      setNote(12, 3520, 280); setNote(13, 0, 100); setNote(14, 3136, 140); setNote(15, 3520, 450);
+      sequenceLength = 16;
     }
   }
 
 private:
   bool active = false;
   unsigned long lastUpdate = 0;
-  int sequence[20];
+  int sequence[40];
   int sequenceLength = 0;
   int noteIndex = 0;
   int noteDuration = 0;
@@ -442,6 +446,8 @@ void loop() {
     rtcMgr.dismissAlarm(); // Clear trigger flag
     Serial.println("\n[ALARM] DS3231 ALARM RINGING!");
     startBehavior("wake_up", now);
+    leds.setMood("red");
+    servo.setTarget(110); // Expressive head movement
     soundFx.play("alarm");
     if (robotWs.isConnected()) {
       robotWs.sendStatus("alarm_triggered", "DS3231 Alarm Ringing");
@@ -451,8 +457,8 @@ void loop() {
     inDarkSleepMode = false;
   }
   
-  // Update stopwatch display if running
-  if (rtcMgr.isStopwatchRunning()) {
+  // Update stopwatch display if active (running or paused with time)
+  if (rtcMgr.isStopwatchActive()) {
     int m, s, c;
     rtcMgr.getStopwatchTime(m, s, c);
     eye.showStopwatch(m, s, c);

@@ -124,6 +124,10 @@ public:
     return stopwatchRunning_;
   }
   
+  bool isStopwatchActive() const {
+    return stopwatchRunning_ || stopwatchElapsed_ > 0;
+  }
+  
   void getStopwatchTime(int& minutes, int& seconds, int& centiseconds) {
     unsigned long totalTime = stopwatchElapsed_;
     if (stopwatchRunning_) {

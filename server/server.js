@@ -233,17 +233,17 @@ wss.on('connection', (ws, req) => {
         }));
     }
 
-    ws.on('message', async (message) => {
+    ws.on('message', async (message, isBinary) => {
         try {
             // Handle binary PCM audio data from ESP32 mic
-            if (Buffer.isBuffer(message)) {
+            if (isBinary) {
                 if (ws === robotWs) {
                     handleMicAudioChunk(message);
                 }
                 return;
             }
 
-            const msg = JSON.parse(message);
+            const msg = JSON.parse(message.toString('utf8'));
 
             // A. FROM ROBOT -> WEB (Sync & Sensors)
             if (ws === robotWs) {

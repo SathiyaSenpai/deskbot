@@ -79,7 +79,7 @@ public:
         
         Serial.print(F("[WiFi] Connecting"));
         int attempts = 0;
-        while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        while (WiFi.status() != WL_CONNECTED && attempts < 35) {
             esp_task_wdt_reset(); // Feed WDT — prevents 5s WDT reset during slow WiFi handshake
             delay(500);
             Serial.print(".");

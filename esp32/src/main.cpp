@@ -666,59 +666,74 @@ void loop() {
     #if ENABLE_MICROPHONE
     bool isAudioPlaying = audioMgr.getIsPlaying();
     if (isAudioPlaying) {
-      // Ensure mic is uninstalled while speaker plays to save DMA RAM & avoid feedback
+      // Ensure mic is stopped while speaker plays to save DMA RAM & avoid feedback
       if (micMgr.isReady()) micMgr.stopRecording();
     } else if (!servoIsMoving) {
-      int vol = micMgr.getLoudness();
-      
+      // Make sure mic driver is running
+      if (!micMgr.isReady()) micMgr.startRecording();
+
+      // Read ONE chunk of PCM data — used for both VAD volume and streaming
+      static uint8_t pcmBuf[512];
+      size_t bytesRead = micMgr.readChunk(pcmBuf, sizeof(pcmBuf));
+
+      // Calculate RMS volume from the raw PCM buffer
+      int vol = 0;
+      if (bytesRead > 0) {
+        int64_t sum = 0;
+        int samples = bytesRead / 2;
+        for (int i = 0; i < (int)bytesRead - 1; i += 2) {
+          int16_t s = (int16_t)(pcmBuf[i] | (pcmBuf[i+1] << 8));
+          sum += (int64_t)s * s;
+        }
+        vol = (int)(sqrtf((float)sum / samples) / 50.0f);
+        if (vol > 100) vol = 100;
+      }
+
       // Dynamic Background Noise Floor Tracking (Non-blocking EMA)
       static float adaptiveNoiseFloor = 15.0f;
       static unsigned long lastVadTriggerTime = 0;
       static unsigned long vadRefractoryWindow = 0;
-      
+
       // Smoothly track background noise floor when not actively listening
       if (vol < adaptiveNoiseFloor + 6) {
         adaptiveNoiseFloor = (0.96f * adaptiveNoiseFloor) + (0.04f * vol);
       } else if (now - lastVadTriggerTime > 12000) {
-        // Slow upward drift if quiet for a long time to adapt to ambient AC/fan noise
         adaptiveNoiseFloor = (0.995f * adaptiveNoiseFloor) + (0.005f * vol);
       }
-      if (adaptiveNoiseFloor < 5.0f) adaptiveNoiseFloor = 5.0f;
+      if (adaptiveNoiseFloor < 5.0f)  adaptiveNoiseFloor = 5.0f;
       if (adaptiveNoiseFloor > 50.0f) adaptiveNoiseFloor = 50.0f;
-      
-      // Dynamic SNR (Signal-to-Noise Ratio) Threshold: +15dB/units above ambient baseline
+
+      // Dynamic SNR Threshold
       int dynamicVadThreshold = (int)adaptiveNoiseFloor + 15;
       if (dynamicVadThreshold < VOLUME_THRESHOLD_LOW) dynamicVadThreshold = VOLUME_THRESHOLD_LOW;
-      
-      // Priority Check: Only evaluate VAD if NO pending touch, NO touch refractory, and NO intimate proximity intrusion (<15cm)
+
+      // Priority Check
       bool touchPriorityActive = pendingTouchReaction || (now - lastTouchTime < touchRefractoryWindow) || d.touchHead || d.touchSide;
       bool intimateProximityActive = (now - lastSpatialTriggerTime < spatialRefractoryWindow) && (d.distance_mm > 0 && d.distance_mm < 150);
-      
+
       if (!touchPriorityActive && !intimateProximityActive && (now - lastVolumeTrigger > 300)) {
         if (vol > dynamicVadThreshold && (now - lastVadTriggerTime > vadRefractoryWindow)) {
           lastVadTriggerTime = now;
           lastVolumeTrigger = now;
           vadRefractoryWindow = random(4000, 7000); // 4-7s attention span
           activityDetected = true;
-          
-          Serial.printf("\n[MIC-VAD] Voice detected! Vol: %d (NoiseFloor: %.1f, Thr: %d) -> 'listening' (Refractory: %lu ms)\n", 
+
+          Serial.printf("\n[MIC-VAD] Voice detected! Vol: %d (NoiseFloor: %.1f, Thr: %d) -> 'listening' (Refractory: %lu ms)\n",
                         vol, adaptiveNoiseFloor, dynamicVadThreshold, vadRefractoryWindow);
           startBehavior("listening", now);
         }
       }
-      
-      // Stream audio chunk to websocket if connected
-      if (robotWs.isConnected() && micMgr.isReady() && (activeBehavior != nullptr && strcmp(activeBehavior->name, "listening") == 0)) {
-        uint8_t pcmBuf[256];
-        size_t bytesRead = micMgr.readChunk(pcmBuf, sizeof(pcmBuf));
-        if (bytesRead > 0) {
-          robotWs.sendAudioChunk(pcmBuf, bytesRead);
-        }
+
+      // Stream the same PCM buffer to server whenever in listening state
+      bool isListening = activeBehavior != nullptr && strcmp(activeBehavior->name, "listening") == 0;
+      if (robotWs.isConnected() && isListening && bytesRead > 0) {
+        robotWs.sendAudioChunk(pcmBuf, bytesRead);
       }
-      
+
       if (vol > 20) leds.voiceReact(vol); // Voice visual reaction
     }
     #endif
+
 
     // 5. Reset sleep timers on activity
     if (activityDetected) {

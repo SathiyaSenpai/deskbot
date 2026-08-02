@@ -252,16 +252,14 @@ void processWebSocketMessage(const WsQueueMessage& msg) {
       break;
     case WS_MSG_LED_ACTION:
       Serial.printf("[LED] Web command: %s\n", msg.data);
-      if (strcmp(msg.data, "off") == 0) {
-        leds.setMood("sleeping");
-      } 
+      if (strcmp(msg.data, "off") == 0) leds.setMood("off");
       else if (strcmp(msg.data, "#ff0000") == 0) leds.setMood("red");
       else if (strcmp(msg.data, "#00ff00") == 0) leds.setMood("green");
       else if (strcmp(msg.data, "#0000ff") == 0) leds.setMood("blue");
-      else if (strcmp(msg.data, "#ffff00") == 0) leds.setMood("happy");
+      else if (strcmp(msg.data, "#ffff00") == 0) leds.setMood("yellow");
       else if (strcmp(msg.data, "#ff00ff") == 0) leds.setMood("purple");
       else if (strcmp(msg.data, "#00ffff") == 0) leds.setMood("cyan");
-      else if (strcmp(msg.data, "#ffffff") == 0) leds.setMood("surprised");
+      else if (strcmp(msg.data, "#ffffff") == 0) leds.setMood("white");
       else leds.setMood(msg.data);
       lastInteractionTime = millis();
       break;
@@ -509,15 +507,15 @@ void loop() {
     }
   }
   
-  // SENSOR DEBOUNCE: Every 5 seconds in sleep mode, normal rate when active
-  unsigned long sensorInterval = inSleepState ? 5000 : (PRESENTATION_MODE ? 200 : 100);
+  // SENSOR DEBOUNCE & STREAMING
+  unsigned long sensorInterval = PRESENTATION_MODE ? 200 : 100;
   if (now - lastSensor > sensorInterval) {
     lastSensor = now;
     SensorData d = sensors.read(rtcMgr.getCachedTemperature()); // Uses non-blocking cached temp
     
     // Stream live sensor readings to server & web dashboard
     static unsigned long lastSensorSendTime = 0;
-    unsigned long sensorSendRate = inSleepState ? 2000 : 300;
+    unsigned long sensorSendRate = 300;
     if (robotWs.isConnected() && (now - lastSensorSendTime > sensorSendRate)) {
       robotWs.sendSensors(d);
       lastSensorSendTime = now;

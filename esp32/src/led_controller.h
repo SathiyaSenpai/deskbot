@@ -62,12 +62,38 @@ public:
       minBrightness_ = 0.05f; maxBrightness_ = 0.25f;
       partialRing_ = false;
     }
-    else if (strcmp(mood, "sleepy_idle") == 0 || strcmp(mood, "sleeping") == 0 || strcmp(mood, "purple") == 0) {
+    else if (strcmp(mood, "sleepy_idle") == 0 || strcmp(mood, "sleeping") == 0) {
       targetColor_ = strip_.Color(80, 60, 140);
       animMode_ = ANIM_DEEP_BREATHE;
       cycleDuration_ = 7.0f;
       minBrightness_ = 0.02f; maxBrightness_ = 0.15f;
       partialRing_ = true;
+    }
+    else if (strcmp(mood, "purple") == 0) {
+      targetColor_ = strip_.Color(180, 0, 255);
+      animMode_ = ANIM_GENTLE_PULSE;
+      cycleDuration_ = 3.0f;
+      minBrightness_ = 0.3f; maxBrightness_ = 0.8f;
+      partialRing_ = false;
+    }
+    else if (strcmp(mood, "white") == 0) {
+      targetColor_ = strip_.Color(255, 255, 255);
+      animMode_ = ANIM_STEADY_GLOW;
+      minBrightness_ = 0.5f; maxBrightness_ = 0.8f;
+      partialRing_ = false;
+    }
+    else if (strcmp(mood, "yellow") == 0) {
+      targetColor_ = strip_.Color(255, 220, 0);
+      animMode_ = ANIM_GENTLE_PULSE;
+      cycleDuration_ = 3.0f;
+      minBrightness_ = 0.3f; maxBrightness_ = 0.8f;
+      partialRing_ = false;
+    }
+    else if (strcmp(mood, "off") == 0) {
+      targetColor_ = strip_.Color(0, 0, 0);
+      animMode_ = ANIM_STEADY_GLOW;
+      minBrightness_ = 0.0f; maxBrightness_ = 0.0f;
+      partialRing_ = false;
     }
     else if (strcmp(mood, "angry") == 0 || strcmp(mood, "red") == 0) {
       targetColor_ = strip_.Color(255, 40, 0);

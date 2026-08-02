@@ -107,38 +107,30 @@ private:
   }
 
   uint16_t readDistanceSimple() {
-    // Simple single reading with short timeout to minimize freeze
+    // 10us trigger pulse to HC-SR04
     digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
     delayMicroseconds(2);
     digitalWrite(PIN_ULTRASONIC_TRIG, HIGH);
     delayMicroseconds(10);
     digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
     
-    // Shorter timeout (5ms) to reduce potential freeze
-    unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 5000);
+    // 10ms timeout for short desk distance (~1.7m max)
+    unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 10000);
     
-    if (duration > 0 && duration < 20000) { // Valid range check
-      uint16_t distance = (duration * 343) / 2000;
+    if (duration > 0 && duration < 12000) {
+      uint16_t distance = (duration * 343) / 2000; // distance in mm
       
-      // Filter out unrealistic values
-      if (distance >= 5 && distance <= 400) { // 5mm to 400cm range
-        static unsigned long lastGoodReading = 0;
-        static uint16_t lastGoodDistance = 0;
-        
-        // Debug output for good readings
-        if (millis() - lastGoodReading > 1000) {
-          if (abs((int)distance - (int)lastGoodDistance) > 20) {
-            Serial.printf("[ULTRASONIC] Distance: %d mm\n", distance);
-            lastGoodReading = millis();
-            lastGoodDistance = distance;
-          }
+      // Short desk distance range: 20mm (2cm) to 1000mm (100cm)
+      if (distance >= 20 && distance <= 1000) {
+        static unsigned long lastLog = 0;
+        if (millis() - lastLog > 2000) {
+          Serial.printf("[ULTRASONIC] Distance: %d mm (%d cm)\n", distance, distance / 10);
+          lastLog = millis();
         }
-        
         return distance;
       }
     }
     
-    // Return 0 for invalid readings
     return 0;
   }
 };

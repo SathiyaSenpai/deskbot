@@ -68,6 +68,8 @@ public:
 
 private:
   uint16_t lastDistance_ = 0;
+  uint16_t lastValidDistance_ = 0;
+  uint8_t failCount_ = 0;
 
   void testUltrasonicConnection() {
     for (int i = 0; i < 3; i++) {
@@ -77,7 +79,7 @@ private:
       delayMicroseconds(10);
       digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
       
-      unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 20000);
+      unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 30000);
       Serial.printf("[ULTRASONIC] Test %d: duration=%lu us", i+1, duration);
       
       if (duration > 0) {
@@ -91,19 +93,36 @@ private:
   }
 
   uint16_t readDistanceSimple() {
+    // 1. Clear any lingering HIGH voltage state on ECHO pin
+    if (digitalRead(PIN_ULTRASONIC_ECHO) == HIGH) {
+      delayMicroseconds(100);
+    }
+
+    // 2. 10us HIGH pulse on TRIG pin
     digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
     delayMicroseconds(4);
     digitalWrite(PIN_ULTRASONIC_TRIG, HIGH);
     delayMicroseconds(10);
     digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
     
-    unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 25000);
+    // 3. Measure ECHO duration (30ms timeout = 5.1m max range)
+    unsigned long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 30000);
     
-    if (duration > 0 && duration < 30000) {
+    if (duration > 0) {
       uint16_t distance = (duration * 343) / 2000;
-      if (distance >= 20 && distance <= 2000) {
+      
+      // Full HC-SR04 hardware range: 20mm (2cm) to 4500mm (4.5m)
+      if (distance >= 20 && distance <= 4500) {
+        lastValidDistance_ = distance;
+        failCount_ = 0;
         return distance;
       }
+    }
+    
+    // Hold previous valid reading for up to 5 missed cycles to prevent UI flicker
+    failCount_++;
+    if (failCount_ < 5 && lastValidDistance_ > 0) {
+      return lastValidDistance_;
     }
     
     return 0;

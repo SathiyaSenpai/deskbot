@@ -338,8 +338,8 @@ function updateSensors(data) {
     const distance = data.distance_mm || 0;
     if (distance === 0) elements.sensorDist.innerText = 'No reading';
     else if (distance < 100) elements.sensorDist.innerText = `${distance} mm (Very close)`;
-    else if (distance < 350) elements.sensorDist.innerText = `${(distance/10).toFixed(0)} cm (Near)`;
-    else elements.sensorDist.innerText = `${(distance/10).toFixed(0)} cm (Far)`;
+    else if (distance < 1000) elements.sensorDist.innerText = `${(distance/10).toFixed(0)} cm (${distance} mm)`;
+    else elements.sensorDist.innerText = `${(distance/1000).toFixed(2)} m (${(distance/10).toFixed(0)} cm)`;
   }
   
   if (elements.sensorTouch) {
